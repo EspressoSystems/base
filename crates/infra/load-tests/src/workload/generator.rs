@@ -74,8 +74,11 @@ impl WorkloadGenerator {
                 TxType::Transfer => {
                     generator = generator.with_payload(TransferPayload::default(), weight_pct);
                 }
-                TxType::Calldata { max_size, repeat_count } => {
-                    let payload = CalldataPayload::new(*max_size).with_repeat_count(*repeat_count);
+                TxType::Calldata { max_size, min_size, zero_filled, repeat_count } => {
+                    let payload = CalldataPayload::new(*max_size)
+                        .with_min_size(*min_size)
+                        .with_zero_filled(*zero_filled)
+                        .with_repeat_count(*repeat_count);
                     generator = generator.with_payload(payload, weight_pct);
                 }
                 TxType::Erc20 { contract } => {
@@ -265,7 +268,15 @@ mod tests {
     fn from_tx_configs_maps_types_to_payload_names() {
         let configs = vec![
             TxConfig { weight: 1, tx_type: TxType::Transfer },
-            TxConfig { weight: 1, tx_type: TxType::Calldata { max_size: 64, repeat_count: 1 } },
+            TxConfig {
+                weight: 1,
+                tx_type: TxType::Calldata {
+                    max_size: 64,
+                    min_size: 0,
+                    zero_filled: false,
+                    repeat_count: 1,
+                },
+            },
             TxConfig { weight: 1, tx_type: TxType::Erc20 { contract: Address::repeat_byte(0x11) } },
             TxConfig { weight: 1, tx_type: TxType::B20 },
             TxConfig {

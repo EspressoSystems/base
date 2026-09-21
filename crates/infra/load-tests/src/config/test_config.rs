@@ -257,6 +257,12 @@ pub enum TxTypeConfig {
         /// Maximum calldata size in bytes.
         #[serde(default = "default_calldata_size")]
         max_size: usize,
+        /// Minimum calldata size in bytes.
+        #[serde(default)]
+        min_size: usize,
+        /// Fill calldata with zero bytes instead of random bytes.
+        #[serde(default)]
+        zero_filled: bool,
         /// Number of times to repeat the random sequence for compressibility.
         #[serde(default = "default_repeat_count")]
         repeat_count: usize,
@@ -718,8 +724,18 @@ impl TestConfig {
     fn convert_tx_type(&self, weighted: &WeightedTxType) -> Result<TxConfig> {
         let tx_type = match &weighted.tx_type {
             TxTypeConfig::Transfer => TxType::Transfer,
-            TxTypeConfig::Calldata { max_size, repeat_count } => {
-                TxType::Calldata { max_size: *max_size, repeat_count: *repeat_count }
+            TxTypeConfig::Calldata { max_size, min_size, zero_filled, repeat_count } => {
+                if min_size > max_size {
+                    return Err(BaselineError::Config(format!(
+                        "calldata min_size ({min_size}) must not exceed max_size ({max_size})"
+                    )));
+                }
+                TxType::Calldata {
+                    max_size: *max_size,
+                    min_size: *min_size,
+                    zero_filled: *zero_filled,
+                    repeat_count: *repeat_count,
+                }
             }
             TxTypeConfig::Erc20 { contract } => TxType::Erc20 { contract: *contract },
             TxTypeConfig::Storage { contract, slots_per_tx } => {

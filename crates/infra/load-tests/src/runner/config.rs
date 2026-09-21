@@ -149,6 +149,10 @@ pub enum TxType {
     Calldata {
         /// Maximum calldata size in bytes.
         max_size: usize,
+        /// Minimum calldata size in bytes.
+        min_size: usize,
+        /// Whether calldata contains only zero bytes.
+        zero_filled: bool,
         /// Repeat count for compressibility (1 = no repetition).
         repeat_count: usize,
     },
