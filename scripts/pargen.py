@@ -34,6 +34,7 @@ import json
 import os
 import subprocess
 import sys
+import re
 
 def config_path(outdir: str, i: int):
     return outdir + f'/config_{i}.yaml'
@@ -72,13 +73,14 @@ class ChainSummary(object):
         if outdir is not None:
             with open(output_path(outdir, i), 'r') as f:
                 results = json.load(f)
+            with open(logs_path(outdir, i), 'r') as f:
+                match = re.search(r'actual_tps\s*=\s*([0-9\.]+)', f.read())
+                if match is None:
+                    raise Exception(f'logs for run {i} do not contain actual_tps line')
+                self._tps = float(match.group(1))
             self._tx_submitted = results['throughput']['total_submitted']
             self._tx_confirmed = results['throughput']['total_confirmed']
             self._blocks = results['block_range']['block_count']
-
-            duration = float(str(results['config']['duration']).removesuffix('s'))
-            self._tps = self._tx_confirmed / duration
-
             block_latency = results['block_latency']['mean']
             self._mean_block_time = block_latency['secs'] + float(block_latency['nanos'])/1e9
         else:
@@ -95,6 +97,7 @@ class ChainSummary(object):
         return ChainSummary(
             tps=self._tps + other._tps,
             tx_submitted=self._tx_submitted + other._tx_submitted,
+            tx_confirmed=self._tx_confirmed + other._tx_confirmed,
             blocks=self._blocks + other._blocks,
             mean_block_time=(self._mean_block_time*self._blocks + other._mean_block_time*other._blocks)/(self._blocks + other._blocks),
         )
