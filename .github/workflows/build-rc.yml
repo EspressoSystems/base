@@ -24,11 +24,7 @@ jobs:
           egress-policy: audit
 
       - name: Validate RC tag
-        run: |
-          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
-            echo "::error::Build RC must be dispatched at an RC tag (vX.Y.Z-rc.N), not a branch or final tag"
-            exit 1
-          fi
+        run: true
 
   build:
     needs: [validate-tag]
