@@ -72,10 +72,12 @@ class ChainSummary(object):
         if outdir is not None:
             with open(output_path(outdir, i), 'r') as f:
                 results = json.load(f)
-            self._tps = results['throughput']['tps']
             self._tx_submitted = results['throughput']['total_submitted']
             self._tx_confirmed = results['throughput']['total_confirmed']
             self._blocks = results['block_range']['block_count']
+
+            duration = float(str(results['config']['duration']).removesuffix('s'))
+            self._tps = self._tx_confirmed / duration
 
             block_latency = results['block_latency']['mean']
             self._mean_block_time = block_latency['secs'] + float(block_latency['nanos'])/1e9
