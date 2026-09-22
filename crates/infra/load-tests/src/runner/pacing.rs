@@ -352,7 +352,6 @@ impl MempoolDepthController {
                 u128::from(target_gps)
                     .saturating_mul(self.block_time.as_nanos())
                     .div_ceil(Duration::from_secs(1).as_nanos())
-                    .min(u128::from(block_gas_limit))
             },
         );
         let ceiling_gas = floor_gas.saturating_mul(2);
@@ -612,14 +611,7 @@ impl LoadRunner {
                     .div_ceil(Duration::from_secs(1).as_nanos())
             },
         );
-        let floor_gas = requested_floor_gas.min(u128::from(block_gas_limit));
-        if requested_floor_gas > floor_gas {
-            warn!(
-                requested_floor_gas,
-                block_gas_limit,
-                "per-block gas target exceeds block gas limit; clamping to block capacity"
-            );
-        }
+        let floor_gas = requested_floor_gas;
         let target = Self::mempool_target_transactions(
             u64::try_from(floor_gas).unwrap_or(u64::MAX),
             initial_avg_gas,

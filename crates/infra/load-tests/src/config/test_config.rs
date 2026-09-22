@@ -176,7 +176,10 @@ impl Default for TestConfig {
             block_time: default_block_time(),
             seed: 12345,
             chain_id: None,
-            transactions: vec![WeightedTxType { weight: 100, tx_type: TxTypeConfig::Transfer }],
+            transactions: vec![WeightedTxType {
+                weight: 100,
+                tx_type: TxTypeConfig::Transfer { value: None, self_recipient: false },
+            }],
             fresh_recipient_ratio: 0.0,
             looper_contract: None,
             swap_token_amount: default_swap_token_amount(),
@@ -250,13 +253,26 @@ pub enum OsakaTarget {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TxTypeConfig {
     /// Simple ETH transfer.
-    Transfer,
+    Transfer {
+        /// Fixed value to transfer. Uses the default random range when omitted.
+        #[serde(default)]
+        value: Option<U256>,
+        /// Send each transaction back to its sender.
+        #[serde(default)]
+        self_recipient: bool,
+    },
 
     /// ETH transfer with random calldata.
     Calldata {
         /// Maximum calldata size in bytes.
         #[serde(default = "default_calldata_size")]
         max_size: usize,
+        /// Minimum calldata size in bytes.
+        #[serde(default)]
+        min_size: usize,
+        /// Fill calldata with zero bytes instead of random bytes.
+        #[serde(default)]
+        zero_filled: bool,
         /// Number of times to repeat the random sequence for compressibility.
         #[serde(default = "default_repeat_count")]
         repeat_count: usize,
@@ -676,7 +692,10 @@ impl TestConfig {
         let block_time = self.parse_block_time()?;
 
         let transactions = if self.transactions.is_empty() {
-            vec![TxConfig { weight: 100, tx_type: TxType::Transfer }]
+            vec![TxConfig {
+                weight: 100,
+                tx_type: TxType::Transfer { value: None, self_recipient: false },
+            }]
         } else {
             self.transactions.iter().map(|t| self.convert_tx_type(t)).collect::<Result<Vec<_>>>()?
         };
@@ -717,9 +736,21 @@ impl TestConfig {
 
     fn convert_tx_type(&self, weighted: &WeightedTxType) -> Result<TxConfig> {
         let tx_type = match &weighted.tx_type {
-            TxTypeConfig::Transfer => TxType::Transfer,
-            TxTypeConfig::Calldata { max_size, repeat_count } => {
-                TxType::Calldata { max_size: *max_size, repeat_count: *repeat_count }
+            TxTypeConfig::Transfer { value, self_recipient } => {
+                TxType::Transfer { value: *value, self_recipient: *self_recipient }
+            }
+            TxTypeConfig::Calldata { max_size, min_size, zero_filled, repeat_count } => {
+                if min_size > max_size {
+                    return Err(BaselineError::Config(format!(
+                        "calldata min_size ({min_size}) must not exceed max_size ({max_size})"
+                    )));
+                }
+                TxType::Calldata {
+                    max_size: *max_size,
+                    min_size: *min_size,
+                    zero_filled: *zero_filled,
+                    repeat_count: *repeat_count,
+                }
             }
             TxTypeConfig::Erc20 { contract } => TxType::Erc20 { contract: *contract },
             TxTypeConfig::Storage { contract, slots_per_tx } => {

@@ -20,6 +20,8 @@ pub struct CalldataPayload {
     pub max_size: usize,
     /// Minimum calldata size in bytes.
     pub min_size: usize,
+    /// Whether calldata contains only zero bytes.
+    pub zero_filled: bool,
     /// Number of times to repeat the random sequence (1 = no repetition).
     /// Higher values produce more compressible data.
     pub repeat_count: usize,
@@ -28,12 +30,18 @@ pub struct CalldataPayload {
 impl CalldataPayload {
     /// Creates a new calldata payload with the given maximum size.
     pub const fn new(max_size: usize) -> Self {
-        Self { max_size, min_size: 0, repeat_count: 1 }
+        Self { max_size, min_size: 0, zero_filled: false, repeat_count: 1 }
     }
 
     /// Sets the minimum calldata size.
     pub const fn with_min_size(mut self, min_size: usize) -> Self {
         self.min_size = min_size;
+        self
+    }
+
+    /// Selects zero-filled calldata instead of random calldata.
+    pub const fn with_zero_filled(mut self, zero_filled: bool) -> Self {
+        self.zero_filled = zero_filled;
         self
     }
 
@@ -46,7 +54,7 @@ impl CalldataPayload {
 
 impl Default for CalldataPayload {
     fn default() -> Self {
-        Self { max_size: 128, min_size: 0, repeat_count: 1 }
+        Self { max_size: 128, min_size: 0, zero_filled: false, repeat_count: 1 }
     }
 }
 
@@ -67,7 +75,9 @@ impl Payload for CalldataPayload {
             rng.gen_range(self.min_size..=self.max_size)
         };
 
-        let data: Vec<u8> = if self.repeat_count <= 1 {
+        let data: Vec<u8> = if self.zero_filled {
+            vec![0; size]
+        } else if self.repeat_count <= 1 {
             (0..size).map(|_| rng.gen_range(0..=255)).collect()
         } else {
             let chunk_size = size.div_ceil(self.repeat_count);
@@ -89,5 +99,24 @@ impl Payload for CalldataPayload {
             .with_to(to)
             .with_input(Bytes::from(data))
             .with_gas_limit(gas_limit)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy_network::TransactionBuilder;
+
+    use super::*;
+
+    #[test]
+    fn fixed_zero_filled_calldata_uses_prague_floor_gas() {
+        let payload = CalldataPayload::new(200).with_min_size(200).with_zero_filled(true);
+        let mut rng = SeededRng::new(1);
+
+        let request = payload.generate(&mut rng, Address::ZERO, Address::ZERO);
+
+        assert_eq!(request.input.input().unwrap().as_ref(), [0; 200]);
+        assert_eq!(request.gas_limit(), Some(23_000));
+        assert_eq!(request.value(), None);
     }
 }

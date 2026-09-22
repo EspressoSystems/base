@@ -646,7 +646,7 @@ impl LoadRunner {
                     tokens.insert(*token_in);
                     tokens.insert(*token_out);
                 }
-                TxType::Transfer
+                TxType::Transfer { .. }
                 | TxType::Calldata { .. }
                 | TxType::Erc20 { .. }
                 | TxType::Storage { .. }
@@ -667,7 +667,7 @@ impl LoadRunner {
                 TxType::UniswapV3 { router, .. } | TxType::AerodromeCl { router, .. } => {
                     routers.insert(*router);
                 }
-                TxType::Transfer
+                TxType::Transfer { .. }
                 | TxType::Calldata { .. }
                 | TxType::Erc20 { .. }
                 | TxType::Storage { .. }
