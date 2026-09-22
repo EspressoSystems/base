@@ -223,3 +223,18 @@ target "zk-host" {
   }
   tags = ["base-prover-zk-host:local"]
 }
+
+target "loadgen" {
+  context = "."
+  dockerfile = "etc/docker/Dockerfile.loadgen"
+  args = {
+    PROFILE = "${PROFILE}"
+    RUST_VERSION = "${RUST_VERSION}"
+    RUSTFLAGS = PROFILE == "profiling" ? "-C link-arg=-fuse-ld=lld -Cforce-frame-pointers=yes" : "-C link-arg=-fuse-ld=lld"
+    CARGO_CHEF_ARGS = "--package base-load-tester"
+    CARGO_FEATURES = PROFILE == "profiling" ? "--features=base/jemalloc-prof,base-reth-node/jemalloc-prof" : ""
+    SCCACHE_CACHE_ID = "loadgen-sccache"
+  }
+  target = "loadgen"
+  tags = ["base:local"]
+}
