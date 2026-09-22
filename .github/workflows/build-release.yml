@@ -184,9 +184,9 @@ jobs:
       matrix:
         settings:
           - arch: linux/amd64
-            runs-on: ubuntu-24.04-16
+            runs-on: ubuntu-24.04-8core
           - arch: linux/arm64
-            runs-on: ubuntu-24.04-arm-16
+            runs-on: ubuntu-24.04-8core-arm
         image:
           - target: base
             name: node
