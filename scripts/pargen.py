@@ -118,7 +118,7 @@ def main():
         for i, proc in enumerate(procs):
             ret = proc.wait()
             if ret != 0:
-                print(f'load generator {i} failed with exit code {ret}; see {logs_path(args.out, i)}')
+                print(f'load generator {i} failed with exit code {ret}; see {logs_path(args.output, i)}')
                 any_failed = True
 
         if any_failed:
