@@ -194,7 +194,7 @@ fn validate_real_token_pair_matches_swaps(
                 })?;
                 (token_in, token_out)
             }
-            TxTypeConfig::Transfer
+            TxTypeConfig::Transfer { .. }
             | TxTypeConfig::Calldata { .. }
             | TxTypeConfig::Erc20 { .. }
             | TxTypeConfig::B20

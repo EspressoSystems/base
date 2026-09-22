@@ -144,7 +144,12 @@ pub struct TxConfig {
 #[derive(Debug, Clone)]
 pub enum TxType {
     /// Simple ETH transfer.
-    Transfer,
+    Transfer {
+        /// Fixed value to transfer. Uses the default random range when omitted.
+        value: Option<U256>,
+        /// Whether each transaction uses its sender as the recipient.
+        self_recipient: bool,
+    },
     /// ETH transfer with random calldata.
     Calldata {
         /// Maximum calldata size in bytes.
@@ -327,7 +332,10 @@ impl LoadConfig {
             seed: 42,
             mnemonic: None,
             sender_offset: 0,
-            transactions: vec![TxConfig { weight: 100, tx_type: TxType::Transfer }],
+            transactions: vec![TxConfig {
+                weight: 100,
+                tx_type: TxType::Transfer { value: None, self_recipient: false },
+            }],
             target_gps: None,
             block_gas_limit: None,
             block_time: Duration::from_secs(2),
