@@ -28,6 +28,7 @@
 #     type: calldata
 #     max_size: 200
 
+from __future__ import annotations
 import argparse
 import json
 import os
