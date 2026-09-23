@@ -28,154 +28,154 @@ permissions:
 
 jobs:
   # Build native binaries for release artifacts
-  build-binaries:
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - triple: x86_64-unknown-linux-gnu
-            runner: depot-ubuntu-24.04-16
-            os: linux
-          - triple: aarch64-unknown-linux-gnu
-            runner: depot-ubuntu-24.04-arm-16
-            os: linux
-          - triple: aarch64-apple-darwin
-            runner: macos-14
-            os: macos
-        binary:
-          - base
-          - base-reth-node
-          - base-consensus
-          - basectl
+  # build-binaries:
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       target:
+  #         - triple: x86_64-unknown-linux-gnu
+  #           runner: ubuntu-24.04-16
+  #           os: linux
+  #         - triple: aarch64-unknown-linux-gnu
+  #           runner: ubuntu-24.04-arm-16
+  #           os: linux
+  #         - triple: aarch64-apple-darwin
+  #           runner: macos-14
+  #           os: macos
+  #       binary:
+  #         - base
+  #         - base-reth-node
+  #         - base-consensus
+  #         - basectl
 
-    runs-on: ${{ matrix.target.runner }}
+  #   runs-on: ${{ matrix.target.runner }}
 
-    steps:
-      - name: Harden the runner (Audit all outbound calls)
-        if: matrix.target.os == 'linux'
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
-        with:
-          egress-policy: audit
+  #   steps:
+  #     - name: Harden the runner (Audit all outbound calls)
+  #       if: matrix.target.os == 'linux'
+  #       uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+  #       with:
+  #         egress-policy: audit
 
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ inputs.tag }}
-          fetch-depth: 1
+  #     - name: Checkout
+  #       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+  #       with:
+  #         ref: ${{ inputs.tag }}
+  #         fetch-depth: 1
 
-      - name: Install system dependencies (Linux)
-        if: matrix.target.os == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libclang-dev pkg-config protobuf-compiler
+  #     - name: Install system dependencies (Linux)
+  #       if: matrix.target.os == 'linux'
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y libclang-dev pkg-config protobuf-compiler
 
-      - name: Install system dependencies (macOS)
-        if: matrix.target.os == 'macos' && matrix.binary == 'basectl'
-        run: brew install protobuf
+  #     - name: Install system dependencies (macOS)
+  #       if: matrix.target.os == 'macos' && matrix.binary == 'basectl'
+  #       run: brew install protobuf
 
-      - name: Install Go for basectl
-        if: matrix.binary == 'basectl'
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: '1.24.x'
+  #     - name: Install Go for basectl
+  #       if: matrix.binary == 'basectl'
+  #       uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+  #       with:
+  #         go-version: '1.24.x'
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@4305c38b25d97ef35a8ad1f985ccf2d2242004f2 # stable
+  #     - name: Install Rust toolchain
+  #       uses: dtolnay/rust-toolchain@4305c38b25d97ef35a8ad1f985ccf2d2242004f2 # stable
 
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
+  #     - name: Setup sccache
+  #       uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-        with:
-          cache-on-failure: true
-          shared-key: release-${{ matrix.target.triple }}
-          save-if: ${{ true }}
-          cache-targets: "false"
+  #     - name: Rust cache
+  #       uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+  #       with:
+  #         cache-on-failure: true
+  #         shared-key: release-${{ matrix.target.triple }}
+  #         save-if: ${{ true }}
+  #         cache-targets: "false"
 
-      - name: Build binary
-        run: |
-          if [ "${{ matrix.target.triple }}" = "aarch64-unknown-linux-gnu" ]; then
-            case "${{ matrix.binary }}" in
-              base|base-consensus|basectl)
-                cargo rustc --locked --profile maxperf -p "${{ matrix.binary }}" --bin "${{ matrix.binary }}" -- -C link-arg=-lblst
-                exit
-            esac
-          fi
-          cargo build --locked --profile maxperf --bin "${{ matrix.binary }}"
+  #     - name: Build binary
+  #       run: |
+  #         if [ "${{ matrix.target.triple }}" = "aarch64-unknown-linux-gnu" ]; then
+  #           case "${{ matrix.binary }}" in
+  #             base|base-consensus|basectl)
+  #               cargo rustc --locked --profile maxperf -p "${{ matrix.binary }}" --bin "${{ matrix.binary }}" -- -C link-arg=-lblst
+  #               exit
+  #           esac
+  #         fi
+  #         cargo build --locked --profile maxperf --bin "${{ matrix.binary }}"
 
-      - name: Package binary
-        run: |
-          TAG="${{ inputs.tag }}"
-          TARGET="${{ matrix.target.triple }}"
-          BIN="${{ matrix.binary }}"
-          ARCHIVE="${BIN}-${TAG}-${TARGET}.tar.gz"
-          tar -czf "$ARCHIVE" -C target/maxperf "$BIN"
-          if command -v sha256sum &>/dev/null; then
-            sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
-          else
-            shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
-          fi
+  #     - name: Package binary
+  #       run: |
+  #         TAG="${{ inputs.tag }}"
+  #         TARGET="${{ matrix.target.triple }}"
+  #         BIN="${{ matrix.binary }}"
+  #         ARCHIVE="${BIN}-${TAG}-${TARGET}.tar.gz"
+  #         tar -czf "$ARCHIVE" -C target/maxperf "$BIN"
+  #         if command -v sha256sum &>/dev/null; then
+  #           sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+  #         else
+  #           shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
+  #         fi
 
-      - name: Sign archives
-        env:
-          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          if [[ -z "$GPG_SIGNING_KEY" || -z "$GPG_PASSPHRASE" ]]; then
-            echo "::error::GPG_SIGNING_KEY and GPG_PASSPHRASE secrets are required to sign release binaries"
-            exit 1
-          fi
+  #     - name: Sign archives
+  #       env:
+  #         GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+  #         GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+  #       run: |
+  #         if [[ -z "$GPG_SIGNING_KEY" || -z "$GPG_PASSPHRASE" ]]; then
+  #           echo "::error::GPG_SIGNING_KEY and GPG_PASSPHRASE secrets are required to sign release binaries"
+  #           exit 1
+  #         fi
 
-          GNUPGHOME="$(mktemp -d)"
-          export GNUPGHOME
-          trap 'rm -rf "$GNUPGHOME"' EXIT
+  #         GNUPGHOME="$(mktemp -d)"
+  #         export GNUPGHOME
+  #         trap 'rm -rf "$GNUPGHOME"' EXIT
 
-          echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --batch --import
-          for archive in *.tar.gz; do
-            printf '%s' "$GPG_PASSPHRASE" | \
-              gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --armor --detach-sign "$archive"
-          done
+  #         echo -n "$GPG_SIGNING_KEY" | base64 --decode | gpg --batch --import
+  #         for archive in *.tar.gz; do
+  #           printf '%s' "$GPG_PASSPHRASE" | \
+  #             gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --armor --detach-sign "$archive"
+  #         done
 
-      - name: Attest build provenance
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
-        with:
-          subject-path: "*.tar.gz"
+  #     - name: Attest build provenance
+  #       uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+  #       with:
+  #         subject-path: "*.tar.gz"
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: binaries-${{ matrix.binary }}-${{ matrix.target.triple }}
-          path: |
-            *.tar.gz
-            *.tar.gz.sha256
-            *.tar.gz.asc
-          if-no-files-found: error
-          retention-days: 1
+  #     - name: Upload artifacts
+  #       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+  #       with:
+  #         name: binaries-${{ matrix.binary }}-${{ matrix.target.triple }}
+  #         path: |
+  #           *.tar.gz
+  #           *.tar.gz.sha256
+  #           *.tar.gz.asc
+  #         if-no-files-found: error
+  #         retention-days: 1
 
-      - name: Create or reuse GitHub Release
-        if: inputs.is_final
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ inputs.tag }}"
-          if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --title "$TAG" --notes "" --draft || gh release view "$TAG" > /dev/null
-          fi
+  #     - name: Create or reuse GitHub Release
+  #       if: inputs.is_final
+  #       env:
+  #         GH_TOKEN: ${{ github.token }}
+  #       run: |
+  #         TAG="${{ inputs.tag }}"
+  #         if ! gh release view "$TAG" > /dev/null 2>&1; then
+  #           gh release create "$TAG" --title "$TAG" --notes "" --draft || gh release view "$TAG" > /dev/null
+  #         fi
 
-      - name: Upload binary to GitHub Release
-        if: inputs.is_final
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ inputs.tag }}"
-          shopt -s nullglob
-          files=("${{ matrix.binary }}-${TAG}-${{ matrix.target.triple }}.tar.gz"*)
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "::error::No binary artifacts found for ${{ matrix.binary }}-${TAG}-${{ matrix.target.triple }}"
-            exit 1
-          fi
-          gh release upload --clobber "$TAG" "${files[@]}"
+  #     - name: Upload binary to GitHub Release
+  #       if: inputs.is_final
+  #       env:
+  #         GH_TOKEN: ${{ github.token }}
+  #       run: |
+  #         TAG="${{ inputs.tag }}"
+  #         shopt -s nullglob
+  #         files=("${{ matrix.binary }}-${TAG}-${{ matrix.target.triple }}.tar.gz"*)
+  #         if [[ ${#files[@]} -eq 0 ]]; then
+  #           echo "::error::No binary artifacts found for ${{ matrix.binary }}-${TAG}-${{ matrix.target.triple }}"
+  #           exit 1
+  #         fi
+  #         gh release upload --clobber "$TAG" "${files[@]}"
 
   # Build multi-arch Docker images
   build-and-push:
@@ -184,9 +184,9 @@ jobs:
       matrix:
         settings:
           - arch: linux/amd64
-            runs-on: depot-ubuntu-24.04-16
+            runs-on: ubuntu-24.04-8core
           - arch: linux/arm64
-            runs-on: depot-ubuntu-24.04-arm-16
+            runs-on: ubuntu-24.04-8core-arm
         image:
           - target: base
             name: node
