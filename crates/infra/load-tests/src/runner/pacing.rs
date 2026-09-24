@@ -317,10 +317,11 @@ pub struct InjectPlan {
     pub limited_by: InjectLimit,
 }
 
-/// Pure controller that keeps one to two blocks of gas in the mempool.
+/// Pure controller for the offered gas rate and mempool depth.
 #[derive(Debug, Clone, Copy)]
 pub struct MempoolDepthController {
     target_gps: Option<u64>,
+    sustain_target_gps: bool,
     block_time: Duration,
     capacity_gas: u128,
     measurement_started_at: Instant,
@@ -330,11 +331,12 @@ impl MempoolDepthController {
     /// Creates a controller for the measured run.
     pub const fn new(
         target_gps: Option<u64>,
+        sustain_target_gps: bool,
         block_time: Duration,
         capacity_gas: u128,
         measurement_started_at: Instant,
     ) -> Self {
-        Self { target_gps, block_time, capacity_gas, measurement_started_at }
+        Self { target_gps, sustain_target_gps, block_time, capacity_gas, measurement_started_at }
     }
 
     /// Computes the gas to inject without performing I/O or reading a clock.
@@ -355,14 +357,20 @@ impl MempoolDepthController {
                     .min(u128::from(block_gas_limit))
             },
         );
-        let ceiling_gas = floor_gas.saturating_mul(2);
+        let ceiling_gas =
+            if self.sustain_target_gps { self.capacity_gas } else { floor_gas.saturating_mul(2) };
         let catchup = self.target_gps.map_or(floor_gas, |target_gps| {
             let cumulative_target = u128::from(target_gps)
                 .saturating_mul(
                     now.saturating_duration_since(self.measurement_started_at).as_nanos(),
                 )
                 .div_ceil(Duration::from_secs(1).as_nanos());
-            cumulative_target.saturating_sub(confirmed_gas).min(floor_gas)
+            let confirmation_deficit = cumulative_target.saturating_sub(confirmed_gas);
+            if self.sustain_target_gps {
+                confirmation_deficit
+            } else {
+                confirmation_deficit.min(floor_gas)
+            }
         });
         let desired_gas = floor_gas.saturating_add(catchup).min(ceiling_gas);
         let wanted = desired_gas.saturating_sub(depth_gas);
@@ -803,6 +811,7 @@ impl LoadRunner {
             );
             let depth_controller = MempoolDepthController::new(
                 self.config.target_gps,
+                self.config.sustain_target_gps,
                 self.config.block_time,
                 u128::from(capacity as u64).saturating_mul(u128::from(initial_avg_gas)),
                 start,
@@ -2320,6 +2329,7 @@ mod tests {
         let started = Instant::now();
         let controller = MempoolDepthController::new(
             Some(1_000_000),
+            false,
             Duration::from_secs(2),
             10_000_000,
             started,
@@ -2346,6 +2356,7 @@ mod tests {
         let started = Instant::now();
         let controller = MempoolDepthController::new(
             Some(1_000_000),
+            false,
             Duration::from_secs(2),
             1_000_000,
             started,
@@ -2362,6 +2373,7 @@ mod tests {
         let started = Instant::now();
         let controller = MempoolDepthController::new(
             Some(1_000_000),
+            false,
             Duration::from_secs(2),
             10_000_000,
             started,
@@ -2385,6 +2397,7 @@ mod tests {
         let started = Instant::now();
         let controller = MempoolDepthController::new(
             Some(1_000_000),
+            false,
             Duration::from_secs(2),
             10_000_000,
             started,
@@ -2403,10 +2416,35 @@ mod tests {
     }
 
     #[test]
+    fn controller_can_sustain_rate_when_confirmations_fall_behind() {
+        let started = Instant::now();
+        let controller = MempoolDepthController::new(
+            Some(1_000_000),
+            true,
+            Duration::from_secs(2),
+            100_000_000,
+            started,
+        );
+
+        let plan = controller.plan(
+            started + Duration::from_secs(20),
+            30_000_000,
+            10_000_000,
+            0,
+            10_000_000,
+        );
+
+        assert_eq!(plan.ceiling_gas, 100_000_000);
+        assert_eq!(plan.desired_gas, 22_000_000);
+        assert_eq!(plan.inject_gas, 10_000_000);
+        assert_eq!(plan.limited_by, InjectLimit::Rate);
+    }
+
+    #[test]
     fn unbounded_controller_targets_two_full_blocks() {
         let started = Instant::now();
         let controller =
-            MempoolDepthController::new(None, Duration::from_secs(2), 100_000_000, started);
+            MempoolDepthController::new(None, false, Duration::from_secs(2), 100_000_000, started);
 
         let plan = controller.plan(started, 30_000_000, 0, 0, 0);
 
@@ -2476,6 +2514,7 @@ mod tests {
                     BlockAlignedEnqueueConfig {
                         controller: MempoolDepthController::new(
                             None,
+                            false,
                             Duration::from_secs(2),
                             1_000_000,
                             Instant::now(),
@@ -2598,6 +2637,7 @@ mod tests {
                 BlockAlignedEnqueueConfig {
                     controller: MempoolDepthController::new(
                         None,
+                        false,
                         Duration::from_secs(2),
                         1_000_000,
                         Instant::now(),

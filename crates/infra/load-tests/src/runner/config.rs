@@ -260,6 +260,8 @@ pub struct LoadConfig {
     pub transactions: Vec<TxConfig>,
     /// Optional gas-per-second target used to size each block's mempool floor.
     pub target_gps: Option<u64>,
+    /// Keep offering `target_gps` when confirmations fall behind.
+    pub sustain_target_gps: bool,
     /// Optional block gas limit override used to size uncapped mempool inventory.
     pub block_gas_limit: Option<u64>,
     /// Expected cadence between canonical blocks.
@@ -329,6 +331,7 @@ impl LoadConfig {
             sender_offset: 0,
             transactions: vec![TxConfig { weight: 100, tx_type: TxType::Transfer }],
             target_gps: None,
+            sustain_target_gps: false,
             block_gas_limit: None,
             block_time: Duration::from_secs(2),
             separate_setup: None,
@@ -364,6 +367,9 @@ impl LoadConfig {
         }
         if self.target_gps == Some(0) {
             return Err(BaselineError::Config("target_gps must be > 0 when set".into()));
+        }
+        if self.sustain_target_gps && self.target_gps.is_none() {
+            return Err(BaselineError::Config("sustain_target_gps requires target_gps".into()));
         }
         if self.block_gas_limit == Some(0) {
             return Err(BaselineError::Config("block_gas_limit must be > 0 when set".into()));

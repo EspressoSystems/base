@@ -54,7 +54,7 @@ impl<F> fmt::Debug for LoadTestRunHooks<F> {
 pub struct LoadTestSetupAmounts {
     /// Native ETH funding amount per sender account.
     pub funding: U256,
-    /// Fixture swap-token mint/distribution amount.
+    /// Fixture ERC20 mint/distribution amount.
     pub swap_token: U256,
     /// B-20 mint amount when B-20 setup is required.
     pub b20_mint: U256,
@@ -235,16 +235,16 @@ impl LoadTestExecutor {
         runner.run().await
     }
 
-    /// Prepares optional real-token, swap-token, and B-20 balances.
+    /// Prepares optional real-token, fixture ERC20, and B-20 balances.
     pub async fn setup_tokens(
         runner: &mut LoadRunner,
         funding_key: &PrivateKeySigner,
         setup: &LoadTestSetupAmounts,
     ) -> Result<()> {
         if setup.real_token_setup.is_none() && !runner.collect_swap_tokens().is_empty() {
-            info!(stage = LoadTestStage::Setup.as_str(), "distributing swap tokens");
+            info!(stage = LoadTestStage::Setup.as_str(), "distributing fixture ERC20 tokens");
             runner.setup_swap_tokens(funding_key.clone(), setup.swap_token).await?;
-            info!(stage = LoadTestStage::Setup.as_str(), "swap tokens distributed");
+            info!(stage = LoadTestStage::Setup.as_str(), "fixture ERC20 tokens distributed");
         }
 
         if setup.real_token_setup.is_some() || runner.needs_b20_setup() {

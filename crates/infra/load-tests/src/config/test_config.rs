@@ -93,6 +93,10 @@ pub struct TestConfig {
     #[serde(default)]
     pub target_gps: Option<u64>,
 
+    /// Keep offering `target_gps` when confirmations fall behind.
+    #[serde(default)]
+    pub sustain_target_gps: bool,
+
     /// Expected cadence between canonical blocks (for example, "2s" or "200ms").
     #[serde(default = "default_block_time")]
     pub block_time: String,
@@ -125,8 +129,8 @@ pub struct TestConfig {
     #[serde(default)]
     pub looper_contract: Option<Address>,
 
-    /// Amount of each swap token to distribute to each sender (in wei, as string).
-    /// Only used when swap transaction types are configured.
+    /// Amount of each fixture ERC20 token to distribute to each sender (in wei, as string).
+    /// Used by ERC20 and fixture-token swap transaction types.
     #[serde(default = "default_swap_token_amount")]
     pub swap_token_amount: String,
 
@@ -173,6 +177,7 @@ impl Default for TestConfig {
             duration: Some("60s".to_string()),
             measurement_blocks: None,
             target_gps: Some(20_000_000),
+            sustain_target_gps: false,
             block_time: default_block_time(),
             seed: 12345,
             chain_id: None,
@@ -206,6 +211,7 @@ impl fmt::Debug for TestConfig {
             .field("duration", &self.duration)
             .field("measurement_blocks", &self.measurement_blocks)
             .field("target_gps", &self.target_gps)
+            .field("sustain_target_gps", &self.sustain_target_gps)
             .field("block_time", &self.block_time)
             .field("seed", &self.seed)
             .field("chain_id", &self.chain_id)
@@ -590,7 +596,7 @@ impl TestConfig {
         })
     }
 
-    /// Parses the swap token amount string into a U256.
+    /// Parses the fixture token amount string into a U256.
     pub fn parse_swap_token_amount(&self) -> Result<alloy_primitives::U256> {
         self.swap_token_amount.parse().map_err(|e| {
             BaselineError::Config(format!(
@@ -628,6 +634,7 @@ impl TestConfig {
             duration: self.duration.clone(),
             measurement_blocks: self.measurement_blocks,
             target_gps: self.target_gps,
+            sustain_target_gps: self.sustain_target_gps,
             block_time: self.block_time.clone(),
             seed: self.seed,
             chain_id: self.chain_id,
@@ -698,6 +705,7 @@ impl TestConfig {
             sender_offset: self.sender_offset as usize,
             transactions,
             target_gps: self.target_gps,
+            sustain_target_gps: self.sustain_target_gps,
             block_gas_limit: None,
             block_time,
             separate_setup: None,
