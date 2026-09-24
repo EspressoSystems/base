@@ -354,7 +354,6 @@ impl MempoolDepthController {
                 u128::from(target_gps)
                     .saturating_mul(self.block_time.as_nanos())
                     .div_ceil(Duration::from_secs(1).as_nanos())
-                    .min(u128::from(block_gas_limit))
             },
         );
         let ceiling_gas =
@@ -620,14 +619,7 @@ impl LoadRunner {
                     .div_ceil(Duration::from_secs(1).as_nanos())
             },
         );
-        let floor_gas = requested_floor_gas.min(u128::from(block_gas_limit));
-        if requested_floor_gas > floor_gas {
-            warn!(
-                requested_floor_gas,
-                block_gas_limit,
-                "per-block gas target exceeds block gas limit; clamping to block capacity"
-            );
-        }
+        let floor_gas = requested_floor_gas;
         let target = Self::mempool_target_transactions(
             u64::try_from(floor_gas).unwrap_or(u64::MAX),
             initial_avg_gas,
@@ -1020,13 +1012,15 @@ impl LoadRunner {
         self.set_display_stage(LoadTestStage::DrainingConfirmations);
 
         let submitted = self.collector.submitted_count();
+        let confirmed = self.collector.confirmed_count();
         let in_flight = results_tracker.total_in_flight();
         let elapsed = start.elapsed();
         info!(
             submitted,
+            confirmed,
             in_flight,
             elapsed_secs = elapsed.as_secs(),
-            actual_tps = submitted as f64 / elapsed.as_secs_f64(),
+            actual_tps = confirmed as f64 / elapsed.as_secs_f64(),
             "load test complete, draining confirmations"
         );
 

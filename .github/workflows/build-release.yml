@@ -190,6 +190,8 @@ jobs:
         image:
           - target: base
             name: node
+          - target: loadgen
+            name: loadgen
 
     runs-on: ${{ matrix.settings.runs-on }}
 

@@ -71,8 +71,11 @@ impl WorkloadGenerator {
             let weight_pct = (tx_config.weight as f64 / total_weight as f64) * 100.0;
 
             match &tx_config.tx_type {
-                TxType::Transfer => {
-                    generator = generator.with_payload(TransferPayload::default(), weight_pct);
+                TxType::Transfer { value, self_recipient } => {
+                    let mut payload =
+                        value.map_or_else(TransferPayload::default, TransferPayload::fixed);
+                    payload.self_recipient = *self_recipient;
+                    generator = generator.with_payload(payload, weight_pct);
                 }
                 TxType::Calldata { max_size, min_size, zero_filled, repeat_count } => {
                     let payload = CalldataPayload::new(*max_size)
@@ -267,7 +270,10 @@ mod tests {
     #[test]
     fn from_tx_configs_maps_types_to_payload_names() {
         let configs = vec![
-            TxConfig { weight: 1, tx_type: TxType::Transfer },
+            TxConfig {
+                weight: 1,
+                tx_type: TxType::Transfer { value: None, self_recipient: false },
+            },
             TxConfig {
                 weight: 1,
                 tx_type: TxType::Calldata {
@@ -324,7 +330,10 @@ mod tests {
     fn from_tx_configs_rejects_zero_total_weight() {
         let err = WorkloadGenerator::from_tx_configs(
             WorkloadConfig::new("test"),
-            &[TxConfig { weight: 0, tx_type: TxType::Transfer }],
+            &[TxConfig {
+                weight: 0,
+                tx_type: TxType::Transfer { value: None, self_recipient: false },
+            }],
             None,
         )
         .expect_err("zero weight");

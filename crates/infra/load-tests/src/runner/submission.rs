@@ -38,9 +38,9 @@ pub const SIGNER_WORKERS_PER_RPC: usize = 10;
 /// Number of sender tasks per submission RPC.
 pub const SENDER_WORKERS_PER_RPC: usize = 10;
 /// Maximum signer task count.
-pub const MAX_SIGNER_WORKER_COUNT: usize = 32;
+pub const MAX_SIGNER_WORKER_COUNT: usize = 128;
 /// Maximum sender task count.
-pub const MAX_SENDER_WORKER_COUNT: usize = 64;
+pub const MAX_SENDER_WORKER_COUNT: usize = 256;
 /// Number of queued prepared or signed batches allowed before backpressure.
 pub const SUBMIT_BATCH_QUEUE_BUFFER: usize = 4096;
 /// Maximum send attempts for signed transaction batches.
@@ -1655,10 +1655,10 @@ mod tests {
         assert_eq!(SubmissionPipeline::signer_worker_count(1, None), 10);
         assert_eq!(SubmissionPipeline::signer_worker_count(1, Some(32)), 32);
         assert_eq!(SubmissionPipeline::signer_worker_count(2, Some(8)), 20);
-        assert_eq!(SubmissionPipeline::signer_worker_count(1, Some(128)), 32);
+        assert_eq!(SubmissionPipeline::signer_worker_count(1, Some(512)), 128);
         assert_eq!(SubmissionPipeline::sender_worker_count(1, None), 10);
         assert_eq!(SubmissionPipeline::sender_worker_count(1, Some(32)), 32);
         assert_eq!(SubmissionPipeline::sender_worker_count(2, Some(8)), 20);
-        assert_eq!(SubmissionPipeline::sender_worker_count(1, Some(128)), 64);
+        assert_eq!(SubmissionPipeline::sender_worker_count(1, Some(512)), 256);
     }
 }
