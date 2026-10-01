@@ -192,6 +192,16 @@ target "prover-service" {
   tags = ["base-prover-service:local"]
 }
 
+target "loadgen" {
+  inherits = ["_rust-service-common"]
+  target = "loadgen"
+  args = {
+    CARGO_CHEF_ARGS = "--package base-load-tester-bin"
+    SCCACHE_CACHE_ID = "rust-services-loadgen-sccache"
+  }
+  tags = ["base-loadgen:local"]
+}
+
 target "nitro-host-local" {
   context = "."
   dockerfile = "etc/docker/Dockerfile.nitro-host"
