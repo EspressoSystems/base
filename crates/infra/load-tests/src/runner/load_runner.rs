@@ -49,6 +49,7 @@ pub struct LoadRunner {
     pub(super) config_summary: Option<ConfigSummary>,
     pub(super) client: QueryProvider,
     pub(super) accounts: AccountPool,
+    pub(super) fixed_recipients: Option<Vec<Address>>,
     pub(super) generator: WorkloadGenerator,
     pub(super) collector: MetricsCollector,
     pub(super) stop_flag: Arc<AtomicBool>,
@@ -107,6 +108,17 @@ impl LoadRunner {
             AccountPool::with_offset(config.seed, config.account_count, config.sender_offset)?
         };
 
+        let fixed_recipients = config
+            .recipient_offset
+            .map(|offset| {
+                let recipients = if let Some(mnemonic) = &config.mnemonic {
+                    AccountPool::from_mnemonic(mnemonic, config.account_count, offset)
+                } else {
+                    AccountPool::with_offset(config.seed, config.account_count, offset)
+                }?;
+                Ok::<_, BaselineError>(recipients.accounts().iter().map(|a| a.address).collect())
+            })
+            .transpose()?;
         let signers = Arc::new(Self::build_signers(&accounts));
         let submission_batch_rpcs = Arc::new(
             config
@@ -174,6 +186,7 @@ impl LoadRunner {
             config_summary: None,
             client,
             accounts,
+            fixed_recipients,
             generator,
             collector: MetricsCollector::new(),
             stop_flag: Arc::new(AtomicBool::new(false)),
@@ -281,7 +294,10 @@ impl LoadRunner {
             };
             let account = &accounts[sender_index];
             let from = account.address;
-            let to = accounts[recipient_index].address;
+            let to = self
+                .fixed_recipients
+                .as_ref()
+                .map_or(accounts[recipient_index].address, |recipients| recipients[sender_index]);
             let nonce = self
                 .client
                 .get_transaction_count(from)

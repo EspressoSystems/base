@@ -360,6 +360,9 @@ pub struct ConfigSummary {
     pub sender_count: u32,
     /// Offset into the derivation path.
     pub sender_offset: u32,
+    /// Start of the fixed recipient-only range, if configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipient_offset: Option<usize>,
     /// Maximum in-flight transactions per sender.
     pub in_flight_per_sender: u32,
     /// Optional ceiling on total in-flight transactions across all senders.
