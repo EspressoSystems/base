@@ -14,15 +14,15 @@
 # max_total_in_flight: 400000
 # max_concurrent_submit_requests: 64
 # batch_size: 2000
-# 
+#
 # duration: "60s"
 # block_time: "1000ms"
 # target_gps: 2300000000
 # seed: 10000
-# 
+#
 # funding_amount: "1000000000000"
 # skip_drain: true
-# 
+#
 # transactions:
 #   - weight: 100
 #     type: calldata

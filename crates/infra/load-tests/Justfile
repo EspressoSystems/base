@@ -84,6 +84,10 @@ real-token network='devnet' *args:
     echo "Running real-token devnet load test with rendered config: $rendered_config"
     cargo run -p base-load-tester-bin --bin base-load-tester -- "$rendered_config" {{args}}
 
+# Deploy a fixture ERC20 and benchmark transfers against Espresso's quick devnet.
+espresso-erc20 *args:
+    ./crates/infra/load-tests/scripts/espresso-erc20.sh {{args}}
+
 # Deploy DoubleCounter and run the local 64-predicate validity stress profile.
 validity-stress *args:
     #!/usr/bin/env bash

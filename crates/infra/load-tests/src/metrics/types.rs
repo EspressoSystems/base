@@ -360,6 +360,9 @@ pub struct ConfigSummary {
     pub sender_count: u32,
     /// Offset into the derivation path.
     pub sender_offset: u32,
+    /// Start of the fixed recipient-only range, if configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipient_offset: Option<usize>,
     /// Maximum in-flight transactions per sender.
     pub in_flight_per_sender: u32,
     /// Optional ceiling on total in-flight transactions across all senders.
@@ -377,6 +380,9 @@ pub struct ConfigSummary {
     pub measurement_blocks: Option<u64>,
     /// Optional gas-per-second target used to size the per-block mempool floor.
     pub target_gps: Option<u64>,
+    /// Whether submissions keep following `target_gps` when confirmations fall behind.
+    #[serde(default)]
+    pub sustain_target_gps: bool,
     /// Expected cadence between canonical blocks.
     pub block_time: String,
     /// Deterministic account seed.
@@ -405,7 +411,7 @@ pub struct ConfigSummary {
     pub validity_priority_fee_divisor: u128,
     /// Address of the precompile looper contract.
     pub looper_contract: Option<String>,
-    /// Amount of each swap token per sender (in wei, as string).
+    /// Amount of each fixture ERC20 token per sender (in wei, as string).
     pub swap_token_amount: String,
     /// Amount of B-20 tokens to mint per sender (in wei, as string).
     pub b20_mint_amount: String,

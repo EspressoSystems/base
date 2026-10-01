@@ -129,6 +129,10 @@ polling only; removing the flashblock watcher does not change the controller or 
 The final pacing summary reports canonical, flashblock, and safety refill-cycle counts so source
 fallback is visible.
 
+Set `sustain_target_gps: true` to keep offering the configured rate when confirmations fall behind.
+This can grow the pending inventory up to `max_total_in_flight`. The default is `false`, which keeps
+the pending inventory within the two-block ceiling.
+
 ### Logging
 
 The CLI defaults to INFO logs for the load-test crates and WARN logs for dependencies. In an

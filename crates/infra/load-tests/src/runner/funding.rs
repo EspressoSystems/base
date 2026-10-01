@@ -27,6 +27,8 @@ use crate::{
 /// Maximum number of concurrent RPC requests during funding/draining operations.
 pub(super) const FUNDING_CONCURRENCY: usize = 32;
 
+const FUNDING_BATCH_SIZE: usize = 1_000;
+const FUNDING_SUBMISSION_CONCURRENCY: usize = 256;
 const FUNDING_REPLACEMENT_FEE_MULTIPLIER: u128 = 3;
 const FUNDING_REPLACEMENT_MAX_ATTEMPTS: u32 = 8;
 
@@ -278,9 +280,8 @@ impl LoadRunner {
                 priority_fee = fees.priority_fee,
                 "pricing funding transaction batch"
             );
-            let batch: Vec<_> = (0..self.config.max_in_flight_per_sender)
-                .filter_map(|_| txs_remaining.pop_front())
-                .collect();
+            let batch: Vec<_> =
+                (0..FUNDING_BATCH_SIZE).filter_map(|_| txs_remaining.pop_front()).collect();
             let reclaimed_nonce_target = batch
                 .iter()
                 .filter_map(|(_, _, nonce, _)| (*nonce < stale_end_nonce).then_some(*nonce + 1))
@@ -308,7 +309,7 @@ impl LoadRunner {
             });
 
             let mut send_stream =
-                stream::iter(send_futs).buffer_unordered(self.config.max_in_flight_per_sender);
+                stream::iter(send_futs).buffer_unordered(FUNDING_SUBMISSION_CONCURRENCY);
 
             while let Some((result, address, deficit, nonce, fund_account)) =
                 send_stream.next().await
@@ -465,7 +466,7 @@ impl LoadRunner {
                 });
 
                 let mut retry_stream =
-                    stream::iter(retry_futs).buffer_unordered(self.config.max_in_flight_per_sender);
+                    stream::iter(retry_futs).buffer_unordered(FUNDING_SUBMISSION_CONCURRENCY);
 
                 while let Some(result) = retry_stream.next().await {
                     match result {
@@ -636,7 +637,7 @@ impl LoadRunner {
         Ok(())
     }
 
-    /// Collects unique token addresses from configured swap transaction types.
+    /// Collects unique token addresses that need sender balances before the run.
     pub fn collect_swap_tokens(&self) -> Vec<Address> {
         let mut tokens = HashSet::new();
         for tx_config in &self.config.transactions {
@@ -646,9 +647,11 @@ impl LoadRunner {
                     tokens.insert(*token_in);
                     tokens.insert(*token_out);
                 }
+                TxType::Erc20 { contract } => {
+                    tokens.insert(*contract);
+                }
                 TxType::Transfer { .. }
                 | TxType::Calldata { .. }
-                | TxType::Erc20 { .. }
                 | TxType::Storage { .. }
                 | TxType::DoubleCounter { .. }
                 | TxType::B20
@@ -754,10 +757,10 @@ impl LoadRunner {
         Ok(removed_total)
     }
 
-    /// Mints swap tokens to all sender accounts.
+    /// Mints fixture tokens to sender and fixed-recipient accounts.
     ///
-    /// Scans the configured transaction types for token addresses, then mints
-    /// `amount_per_token` of each token to every sender that has insufficient balance.
+    /// Scans the configured ERC20 and swap transaction types for token addresses, then mints
+    /// `amount_per_token` of each token to every holder that has insufficient balance.
     /// Skips accounts that already have enough tokens. Requires tokens that expose
     /// a public `mint(address,uint256)` function (e.g., `FreeTransferERC20`).
     #[instrument(skip(self, funding_key), fields(accounts = self.accounts.len()))]
@@ -772,8 +775,13 @@ impl LoadRunner {
             return Ok(());
         }
 
-        let sender_addresses: Vec<Address> =
-            self.accounts.accounts().iter().map(|a| a.address).collect();
+        let sender_addresses: Vec<Address> = self
+            .accounts
+            .accounts()
+            .iter()
+            .map(|a| a.address)
+            .chain(self.fixed_recipients.iter().flatten().copied())
+            .collect();
         let token_count = tokens.len();
         let total_pairs = token_count * sender_addresses.len();
 
@@ -900,8 +908,7 @@ impl LoadRunner {
         let total_txs = txs.len();
         let mut txs_remaining = txs.into_iter().peekable();
         while txs_remaining.peek().is_some() {
-            let batch: Vec<_> =
-                txs_remaining.by_ref().take(self.config.max_in_flight_per_sender).collect();
+            let batch: Vec<_> = txs_remaining.by_ref().take(FUNDING_BATCH_SIZE).collect();
             let mut pending_txs: Vec<(Address, Address)> = Vec::new();
 
             let send_futs = batch.into_iter().map(|(tx, token, sender)| {
@@ -913,7 +920,7 @@ impl LoadRunner {
             });
 
             let mut send_stream =
-                stream::iter(send_futs).buffer_unordered(self.config.max_in_flight_per_sender);
+                stream::iter(send_futs).buffer_unordered(FUNDING_SUBMISSION_CONCURRENCY);
 
             while let Some((result, token, sender)) = send_stream.next().await {
                 match result {

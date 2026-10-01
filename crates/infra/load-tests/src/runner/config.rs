@@ -261,10 +261,14 @@ pub struct LoadConfig {
     pub mnemonic: Option<String>,
     /// Offset into account derivation (skip first N accounts).
     pub sender_offset: usize,
+    /// Start of a disjoint recipient-only range using the same seed or mnemonic as senders.
+    pub recipient_offset: Option<usize>,
     /// Transaction types with weights.
     pub transactions: Vec<TxConfig>,
     /// Optional gas-per-second target used to size each block's mempool floor.
     pub target_gps: Option<u64>,
+    /// Keep offering `target_gps` when confirmations fall behind.
+    pub sustain_target_gps: bool,
     /// Optional block gas limit override used to size uncapped mempool inventory.
     pub block_gas_limit: Option<u64>,
     /// Expected cadence between canonical blocks.
@@ -332,11 +336,13 @@ impl LoadConfig {
             seed: 42,
             mnemonic: None,
             sender_offset: 0,
+            recipient_offset: None,
             transactions: vec![TxConfig {
                 weight: 100,
                 tx_type: TxType::Transfer { value: None, self_recipient: false },
             }],
             target_gps: None,
+            sustain_target_gps: false,
             block_gas_limit: None,
             block_time: Duration::from_secs(2),
             separate_setup: None,
@@ -373,6 +379,9 @@ impl LoadConfig {
         if self.target_gps == Some(0) {
             return Err(BaselineError::Config("target_gps must be > 0 when set".into()));
         }
+        if self.sustain_target_gps && self.target_gps.is_none() {
+            return Err(BaselineError::Config("sustain_target_gps requires target_gps".into()));
+        }
         if self.block_gas_limit == Some(0) {
             return Err(BaselineError::Config("block_gas_limit must be > 0 when set".into()));
         }
@@ -405,6 +414,34 @@ impl LoadConfig {
             return Err(BaselineError::Config(
                 "fresh_recipient_ratio must be between 0.0 and 1.0".into(),
             ));
+        }
+        if let Some(recipient_offset) = self.recipient_offset {
+            if self.fresh_recipient_ratio > 0.0
+                || self.transactions.iter().any(|tx| matches!(tx.tx_type, TxType::B20))
+            {
+                return Err(BaselineError::Config(
+                    "recipient_offset cannot be combined with fresh or bidirectional recipients"
+                        .into(),
+                ));
+            }
+
+            let sender_end =
+                self.sender_offset.checked_add(self.account_count).ok_or_else(|| {
+                    BaselineError::Config("sender account derivation range overflows usize".into())
+                })?;
+            let recipient_end =
+                recipient_offset.checked_add(self.account_count).ok_or_else(|| {
+                    BaselineError::Config(
+                        "recipient account derivation range overflows usize".into(),
+                    )
+                })?;
+            let sender_range = self.sender_offset..sender_end;
+            let recipient_range = recipient_offset..recipient_end;
+            if sender_range.contains(&recipient_offset)
+                || recipient_range.contains(&self.sender_offset)
+            {
+                return Err(BaselineError::Config("sender and recipient ranges overlap".into()));
+            }
         }
         if !(0.0..=1.0).contains(&self.validity_ratio) {
             return Err(BaselineError::Config("validity_ratio must be between 0.0 and 1.0".into()));

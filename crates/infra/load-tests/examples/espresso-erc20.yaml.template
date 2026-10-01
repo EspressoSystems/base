@@ -1,0 +1,27 @@
+transaction_submission_rpcs:
+  - "http://localhost:8546"
+query_rpc: "http://localhost:8546"
+
+chain_id: 99099
+sender_count: 50
+recipient_offset: 100000
+in_flight_per_sender: 900
+max_total_in_flight: 45000
+max_concurrent_submit_requests: 8
+batch_size: 100
+
+duration: "60s"
+# Pacing inventory interval, not measured block time.
+block_time: "500ms"
+target_gps: 1400000000
+sustain_target_gps: false
+seed: 31000
+
+funding_amount: "500000000000"
+swap_token_amount: "500000000000000000000"
+skip_drain: true
+
+transactions:
+  - weight: 100
+    type: erc20
+    contract: "__ERC20__"
