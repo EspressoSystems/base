@@ -8,8 +8,6 @@ The public operator image (`ghcr.io/base/node`) is the `base` target in `Dockerf
 
 `Dockerfile.rust-services` is the shared multi-target Dockerfile for the Debian-based Rust services. The `base` target is published as `ghcr.io/base/node` and is also the local devnet image. Devnet compose overrides the default supervisord CMD.
 
-The `loadgen` target packages the `base-load-tester` binary. The `Loadgen Docker Image` workflow (`.github/workflows/loadgen-docker.yml`) builds it for amd64 and arm64 on pull requests and publishes `ghcr.io/espressosystems/loadgen` on pushes to `main`, `v*` tags, and manual runs. Build it locally with `docker buildx bake -f etc/docker/docker-bake.hcl loadgen --load`.
-
 `Dockerfile.devnet` builds a utility image containing genesis generation tools (`eth-genesis-state-generator`, `eth2-val-tools`, `op-deployer`) and setup scripts. This image bootstraps L1 and L2 chain configurations for local development.
 
 `Dockerfile.op-batcher` builds Go `op-batcher/v1.16.5` at commit
