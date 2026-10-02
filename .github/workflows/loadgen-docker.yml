@@ -156,10 +156,16 @@ jobs:
 
           docker buildx imagetools create "${tag_args[@]}" "${sources[@]}"
 
+          digest="$(docker buildx imagetools inspect "${tags[0]}" --format '{{.Manifest.Digest}}')"
+          echo "Manifest list digest: ${digest}"
+
           {
             echo "## Loadgen image published"
             echo ""
+            echo "Digest: \`${digest}\`"
+            echo ""
             echo '```bash'
+            echo "docker pull ${REGISTRY_IMAGE}@${digest}"
             for tag in "${tags[@]}"; do
               echo "docker pull ${tag}"
             done
