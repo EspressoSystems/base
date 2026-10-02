@@ -1003,13 +1003,15 @@ impl LoadRunner {
         self.set_display_stage(LoadTestStage::DrainingConfirmations);
 
         let submitted = self.collector.submitted_count();
+        let confirmed = self.collector.confirmed_count();
         let in_flight = results_tracker.total_in_flight();
         let elapsed = start.elapsed();
         info!(
             submitted,
+            confirmed,
             in_flight,
             elapsed_secs = elapsed.as_secs(),
-            actual_tps = submitted as f64 / elapsed.as_secs_f64(),
+            actual_tps = confirmed as f64 / elapsed.as_secs_f64(),
             "load test complete, draining confirmations"
         );
 

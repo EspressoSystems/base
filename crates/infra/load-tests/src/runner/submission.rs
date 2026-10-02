@@ -1655,10 +1655,10 @@ mod tests {
         assert_eq!(SubmissionPipeline::signer_worker_count(1, None), 10);
         assert_eq!(SubmissionPipeline::signer_worker_count(1, Some(32)), 32);
         assert_eq!(SubmissionPipeline::signer_worker_count(2, Some(8)), 20);
-        assert_eq!(SubmissionPipeline::signer_worker_count(1, Some(128)), 32);
+        assert_eq!(SubmissionPipeline::signer_worker_count(1, Some(512)), 128);
         assert_eq!(SubmissionPipeline::sender_worker_count(1, None), 10);
         assert_eq!(SubmissionPipeline::sender_worker_count(1, Some(32)), 32);
         assert_eq!(SubmissionPipeline::sender_worker_count(2, Some(8)), 20);
-        assert_eq!(SubmissionPipeline::sender_worker_count(1, Some(128)), 64);
+        assert_eq!(SubmissionPipeline::sender_worker_count(1, Some(512)), 256);
     }
 }
