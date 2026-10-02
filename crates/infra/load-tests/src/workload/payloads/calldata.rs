@@ -104,8 +104,6 @@ impl Payload for CalldataPayload {
 
 #[cfg(test)]
 mod tests {
-    use alloy_network::TransactionBuilder;
-
     use super::*;
 
     #[test]
@@ -116,7 +114,7 @@ mod tests {
         let request = payload.generate(&mut rng, Address::ZERO, Address::ZERO);
 
         assert_eq!(request.input.input().unwrap().as_ref(), [0; 200]);
-        assert_eq!(request.gas_limit(), Some(23_000));
-        assert_eq!(request.value(), None);
+        assert_eq!(request.gas, Some(23_000));
+        assert_eq!(request.value, None);
     }
 }
