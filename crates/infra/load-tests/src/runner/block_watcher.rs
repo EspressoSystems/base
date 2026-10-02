@@ -37,6 +37,10 @@ const LIVE_CATCHUP_WINDOW: Duration = Duration::from_secs(16);
 const LIVE_RECEIPT_SAMPLE_BLOCKS: u64 = 10;
 /// Maximum time to wait for a block watcher RPC request.
 const BLOCK_RPC_TIMEOUT: Duration = Duration::from_secs(10);
+/// Longest sleep between block polls. `block_time` also sizes the load's mempool depth window and may be
+/// longer than the real block interval; the expected boundary then runs ahead of the chain, and sleeping
+/// until it would skip blocks beyond the catch-up window.
+const MAX_WATCH_SLEEP: Duration = Duration::from_millis(250);
 /// Maximum time to wait for a block receipt RPC request.
 const RECEIPT_RPC_TIMEOUT: Duration = Duration::from_secs(50);
 /// Catch-up window when the first successful poll happens with no tip baseline.
@@ -203,7 +207,9 @@ impl BlockWatcher {
             tokio::select! {
                 biased;
                 _ = self.cancel_token.cancelled() => return,
-                _ = tokio::time::sleep_until(clock.expected_boundary().into()) => {}
+                _ = tokio::time::sleep_until(
+                    Self::next_poll(clock.expected_boundary(), Instant::now()).into()
+                ) => {}
             }
 
             let expected_boundary = clock.expected_boundary();
@@ -742,6 +748,12 @@ impl BlockWatcher {
         Ok(Some((block.header.number, block.transactions.hashes().collect())))
     }
 
+    /// When to poll for the next block: at the expected boundary, but no later than
+    /// [`MAX_WATCH_SLEEP`] from `now`.
+    pub fn next_poll(expected_boundary: Instant, now: Instant) -> Instant {
+        expected_boundary.min(now + MAX_WATCH_SLEEP)
+    }
+
     /// Converts a catch-up duration to a block count, rounding partial blocks up.
     pub fn catchup_blocks(window: Duration, block_time: Duration) -> u64 {
         assert!(!block_time.is_zero(), "block time must be greater than zero");
@@ -960,6 +972,25 @@ mod tests {
             BlockWatcher::catchup_blocks(Duration::from_millis(201), Duration::from_millis(200)),
             2
         );
+    }
+
+    #[test]
+    fn next_poll_waits_for_a_boundary_within_the_longest_sleep() {
+        let now = Instant::now();
+        let boundary = now + Duration::from_millis(100);
+
+        assert_eq!(BlockWatcher::next_poll(boundary, now), boundary);
+    }
+
+    #[test]
+    fn next_poll_caps_a_boundary_that_ran_ahead_of_the_chain() {
+        // With a block_time of 3s, the clock's boundary is 21s past `now` after six blocks. If
+        // real blocks come every second, sleeping until it lets the chain pass the catch-up window.
+        let now = Instant::now();
+        let mut clock = BlockClock::from_now(Duration::from_secs(3), now);
+        clock.advance(6);
+
+        assert_eq!(BlockWatcher::next_poll(clock.expected_boundary(), now), now + MAX_WATCH_SLEEP);
     }
 
     #[test]
