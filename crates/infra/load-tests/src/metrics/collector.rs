@@ -36,6 +36,8 @@ pub struct MetricsCollector {
     pacing_duration: Option<Duration>,
     undrained_transactions: u64,
     undrained_gas: u128,
+    /// Confirmed count and time when the measured load passed `measurement_skip`.
+    steady_mark: Option<(usize, Instant)>,
 }
 
 impl MetricsCollector {
@@ -57,6 +59,7 @@ impl MetricsCollector {
             pacing_duration: None,
             undrained_transactions: 0,
             undrained_gas: 0,
+            steady_mark: None,
         }
     }
 
@@ -258,6 +261,21 @@ impl MetricsCollector {
         self.pacing_duration = None;
         self.undrained_transactions = 0;
         self.undrained_gas = 0;
+        self.steady_mark = None;
+    }
+
+    /// Records the confirmed count now, once, as the start of the steady-state measurement.
+    pub fn mark_steady_start(&mut self) {
+        if self.steady_mark.is_none() {
+            self.steady_mark = Some((self.confirmed_count(), Instant::now()));
+        }
+    }
+
+    /// Transactions confirmed per second since [`Self::mark_steady_start`], or `None` before it.
+    pub fn steady_tps(&self) -> Option<f64> {
+        let (confirmed, at) = self.steady_mark?;
+        let elapsed = at.elapsed().as_secs_f64();
+        (elapsed > 0.0).then(|| self.confirmed_count().saturating_sub(confirmed) as f64 / elapsed)
     }
 
     fn summarize_pacing(&self, duration: Duration) -> PacingMetrics {

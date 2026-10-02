@@ -275,6 +275,8 @@ pub struct LoadConfig {
     pub duration: Option<Duration>,
     /// Optional measured canonical block window size.
     pub measurement_blocks: Option<u64>,
+    /// Optional time after the start of the measured load from which `steady_tps` counts.
+    pub measurement_skip: Option<Duration>,
     /// Maximum in-flight (unconfirmed) transactions per sender.
     pub max_in_flight_per_sender: usize,
     /// Optional ceiling on total in-flight (unconfirmed) transactions across all senders.
@@ -342,6 +344,7 @@ impl LoadConfig {
             separate_setup: None,
             duration: Some(Duration::from_secs(30)),
             measurement_blocks: None,
+            measurement_skip: None,
             max_in_flight_per_sender: DEFAULT_MAX_IN_FLIGHT_PER_SENDER,
             max_total_in_flight: None,
             max_concurrent_submit_requests: None,

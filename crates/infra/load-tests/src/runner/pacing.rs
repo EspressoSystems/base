@@ -141,6 +141,7 @@ struct EnqueueProgressDisplay<'a> {
     account_count: usize,
     gas_price_gwei: f64,
     target_gps: Option<u64>,
+    measurement_skip: Option<Duration>,
 }
 
 impl EnqueueProgressDisplay<'_> {
@@ -149,6 +150,9 @@ impl EnqueueProgressDisplay<'_> {
         collector: &mut MetricsCollector,
         results_tracker: &ResultsTracker,
     ) {
+        if self.measurement_skip.is_some_and(|skip| self.start.elapsed() >= skip) {
+            collector.mark_steady_start();
+        }
         let should_render = (self.display.is_some() || self.snapshot_tx.is_some())
             && self.last_update.elapsed() >= DISPLAY_RENDER_INTERVAL;
         let should_log = self.last_log.elapsed() >= PROGRESS_REPORT_INTERVAL;
@@ -716,6 +720,7 @@ impl LoadRunner {
                     account_count,
                     gas_price_gwei: self.base_fee as f64 / 1e9,
                     target_gps: self.config.target_gps,
+                    measurement_skip: None,
                 }),
             },
         )
@@ -844,6 +849,7 @@ impl LoadRunner {
                         account_count,
                         gas_price_gwei: self.base_fee as f64 / 1e9,
                         target_gps: self.config.target_gps,
+                        measurement_skip: self.config.measurement_skip,
                     }),
                 },
             )
@@ -1006,14 +1012,26 @@ impl LoadRunner {
         let confirmed = self.collector.confirmed_count();
         let in_flight = results_tracker.total_in_flight();
         let elapsed = start.elapsed();
-        info!(
-            submitted,
-            confirmed,
-            in_flight,
-            elapsed_secs = elapsed.as_secs(),
-            actual_tps = confirmed as f64 / elapsed.as_secs_f64(),
-            "load test complete, draining confirmations"
-        );
+        if let Some(steady_tps) = self.collector.steady_tps() {
+            info!(
+                submitted,
+                confirmed,
+                in_flight,
+                elapsed_secs = elapsed.as_secs(),
+                actual_tps = confirmed as f64 / elapsed.as_secs_f64(),
+                steady_tps,
+                "load test complete, draining confirmations"
+            );
+        } else {
+            info!(
+                submitted,
+                confirmed,
+                in_flight,
+                elapsed_secs = elapsed.as_secs(),
+                actual_tps = confirmed as f64 / elapsed.as_secs_f64(),
+                "load test complete, draining confirmations"
+            );
+        }
 
         let drain_start = Instant::now();
         let confirmation_drain_timeout = if open_loop_enqueue_error.is_some() {
