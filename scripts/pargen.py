@@ -61,12 +61,10 @@ def load_gen(cmd: str, outdir: str, i: int, funder: str):
     os.putenv('FUNDER_KEY', funder)
     os.putenv('LOAD_TEST_OUTPUT', output_path(outdir, i))
 
+    cmd = cmd.replace('%CHAIN%', str(i + 1)).split()
+
     logs = open(logs_path(outdir, i), 'w')
-    return subprocess.Popen(
-        cmd.split() + [config_path(outdir, i)],
-        stdout=logs,
-        stderr=logs,
-    )
+    return subprocess.Popen(cmd + [config_path(outdir, i)], stdout=logs, stderr=logs)
 
 class ChainSummary(object):
     def __init__(self, outdir=None, i=None, tps=None, tx_submitted=None, tx_confirmed=None, blocks=None, mean_block_time=None):
@@ -107,7 +105,7 @@ def main():
     parser.add_argument("--config", required=True, help="shared config for each generator")
     parser.add_argument("-o", "--output", required=True, help="directory for storing generated configs, logs, and results")
     parser.add_argument("-c", "--chain", required=True, action='append', help="sequencer URLs for chains under test")
-    parser.add_argument("--command", help="command to run the load generator", default="cargo run --release -p base-load-tester-bin --bin base-load-tester --")
+    parser.add_argument("--command", help="Command to run the load generator. Command must be a single string, but it will be split into an argv vector using whitespace. If present, the token %%CHAIN%% is replaced by the 1-based index of the chain under test.", default="cargo run --release -p base-load-tester-bin --bin base-load-tester --")
     parser.add_argument("--funder", help="private key used to fund load gen accounts", default="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
     parser.add_argument("--summarize", action='store_true', help="summarize results from a previous run, do not do a new run")
 
