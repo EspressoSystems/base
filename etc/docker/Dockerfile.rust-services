@@ -280,3 +280,17 @@ ENTRYPOINT ["./base-prover-service"]
 FROM runtime-base AS zk-host
 COPY --from=zk-host-builder /app/base-prover-zk-host ./base-prover-zk-host
 ENTRYPOINT ["./base-prover-zk-host"]
+
+# Espresso fork: load generator image, built by .github/workflows/loadgen-docker.yml.
+FROM source AS loadgen-builder
+ARG PROFILE=release
+ARG SCCACHE_CACHE_ID=rust-services-sccache
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=${SCCACHE_CACHE_ID},target=/sccache,sharing=locked \
+    cargo build --locked --profile $PROFILE --package base-load-tester-bin --bin base-load-tester && \
+    cp /app/target/$([ "$PROFILE" = "dev" ] && echo debug || echo "$PROFILE")/base-load-tester /app/base-load-tester
+
+FROM runtime-base AS loadgen
+COPY --from=loadgen-builder /app/base-load-tester ./base-load-tester
+ENTRYPOINT ["./base-load-tester"]
