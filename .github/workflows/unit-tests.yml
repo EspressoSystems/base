@@ -1,0 +1,78 @@
+name: Unit Tests
+
+# Runs the workspace test suite (excluding system tests) with nextest. Mirrors
+# the upstream `Test` job in .depot/workflows/ci-core.yml on GitHub-hosted runners.
+on:
+  push:
+    branches: [espresso-main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: unit-tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+permissions:
+  checks: write
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-24.04-8core
+    timeout-minutes: 120
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+
+      - uses: ./.github/actions/setup
+        with:
+          free-disk: "true"
+          native-deps: "true"
+          foundry: "true"
+          sp1: "true"
+          tools: cargo-nextest
+          # Dependency artifacts (incl. proc-macros and build scripts, which
+          # sccache cannot cache) are restored from the target-dir cache. Only
+          # espresso-main saves it: GHA caches saved there are readable from
+          # every PR, while per-PR copies would just churn the repo's cache quota.
+          rust-cache-shared-key: "unit-tests"
+          rust-cache-targets: "true"
+          rust-cache-save: ${{ github.ref == 'refs/heads/espresso-main' }}
+          # Workspace crates are pruned from the target-dir cache, so sccache
+          # covers them; PR runs write too so follow-up pushes reuse them.
+          sccache-write: "true"
+
+      - name: Run tests
+        run: just test-ci
+
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
+
+      - name: Check for JUnit testcases
+        if: always()
+        id: junit-results
+        run: |
+          if [ -f target/nextest/ci/test-results.xml ] && grep -q '<testcase[ >]' target/nextest/ci/test-results.xml; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report test results
+        if: ${{ always() && steps.junit-results.outputs.present == 'true' }}
+        uses: mikepenz/action-junit-report@bccf2e31636835cf0874589931c4116687171386 # v6.4.0
+        with:
+          report_paths: target/nextest/ci/test-results.xml
