@@ -636,7 +636,7 @@ impl LoadRunner {
         Ok(())
     }
 
-    /// Collects unique token addresses from configured swap transaction types.
+    /// Collects unique token addresses that need sender balances before the run.
     pub fn collect_swap_tokens(&self) -> Vec<Address> {
         let mut tokens = HashSet::new();
         for tx_config in &self.config.transactions {
@@ -646,9 +646,11 @@ impl LoadRunner {
                     tokens.insert(*token_in);
                     tokens.insert(*token_out);
                 }
+                TxType::Erc20 { contract } => {
+                    tokens.insert(*contract);
+                }
                 TxType::Transfer { .. }
                 | TxType::Calldata { .. }
-                | TxType::Erc20 { .. }
                 | TxType::Storage { .. }
                 | TxType::DoubleCounter { .. }
                 | TxType::B20

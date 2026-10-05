@@ -551,6 +551,8 @@ impl std::fmt::Debug for LoadRunner {
 
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::Address;
+
     use super::{LoadConfig, LoadRunner};
     use crate::runner::{TxConfig, TxType};
 
@@ -582,6 +584,18 @@ mod tests {
         let config = LoadConfig { account_count: 1, ..LoadConfig::devnet() };
         let runner = LoadRunner::new(config).expect("valid config");
         assert_eq!(runner.accounts.len(), 1, "ETH transfer workloads must not add a partner");
+    }
+
+    #[test]
+    fn erc20_contract_is_prepared_as_a_fixture_token() {
+        let contract = Address::repeat_byte(0x11);
+        let config = LoadConfig {
+            transactions: vec![TxConfig { weight: 100, tx_type: TxType::Erc20 { contract } }],
+            ..LoadConfig::devnet()
+        };
+        let runner = LoadRunner::new(config).expect("valid config");
+
+        assert_eq!(runner.collect_swap_tokens(), vec![contract]);
     }
 
     #[test]
