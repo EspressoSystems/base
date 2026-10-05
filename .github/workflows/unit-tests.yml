@@ -43,10 +43,23 @@ jobs:
           foundry: "true"
           sp1: "true"
           tools: cargo-nextest
-          sccache-write: ${{ github.event_name != 'pull_request' }}
+          # Dependency artifacts (incl. proc-macros and build scripts, which
+          # sccache cannot cache) are restored from the target-dir cache. Only
+          # espresso-main saves it: GHA caches saved there are readable from
+          # every PR, while per-PR copies would just churn the repo's cache quota.
+          rust-cache-shared-key: "unit-tests"
+          rust-cache-targets: "true"
+          rust-cache-save: ${{ github.ref == 'refs/heads/espresso-main' }}
+          # Workspace crates are pruned from the target-dir cache, so sccache
+          # covers them; PR runs write too so follow-up pushes reuse them.
+          sccache-write: "true"
 
       - name: Run tests
         run: just test-ci
+
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
 
       - name: Check for JUnit testcases
         if: always()

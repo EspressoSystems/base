@@ -32,6 +32,11 @@ inputs:
   rust-cache-save:
     description: Whether to save the Rust cache
     default: "false"
+  rust-cache-targets:
+    description: >
+      Whether the Rust cache also stores the target directory (dependency
+      artifacts only; workspace crates are pruned before saving)
+    default: "false"
   just:
     description: Install just
     default: "true"
@@ -136,7 +141,7 @@ runs:
         cache-on-failure: true
         shared-key: ${{ inputs.rust-cache-shared-key }}
         save-if: ${{ inputs.rust-cache-save }}
-        cache-targets: "false"
+        cache-targets: ${{ inputs.rust-cache-targets }}
 
     - name: Install just
       if: inputs.just == 'true'
