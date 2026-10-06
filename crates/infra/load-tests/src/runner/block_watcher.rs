@@ -217,7 +217,7 @@ impl BlockWatcher {
             let mut availability_miss_logged = false;
             let mut required_retry = false;
             let latest = loop {
-                match self.fetch_latest_block_with_timeout(BLOCK_RPC_TIMEOUT).await {
+                match self.fetch_new_block(last_seen_block, BLOCK_RPC_TIMEOUT).await {
                     Ok(block) => {
                         if let Some(block) = block
                             && last_seen_block.is_none_or(|seen| block.observation.number > seen)
@@ -470,11 +470,19 @@ impl BlockWatcher {
         self.fetch_block(BlockNumberOrTag::Latest, BLOCK_RPC_TIMEOUT).await
     }
 
-    async fn fetch_latest_block_with_timeout(
+    async fn fetch_new_block(
         &self,
+        last_seen: Option<u64>,
         timeout: Duration,
     ) -> std::result::Result<Option<ObservedBlock>, String> {
-        self.fetch_block(BlockNumberOrTag::Latest, timeout).await
+        let number = tokio::time::timeout(timeout, self.provider.get_block_number())
+            .await
+            .map_err(|_| format!("eth_blockNumber timed out after {timeout:?}"))?
+            .map_err(|e| e.to_string())?;
+        if last_seen.is_some_and(|seen| number <= seen) {
+            return Ok(None);
+        }
+        self.fetch_block(number, timeout).await
     }
 
     async fn fetch_block(
