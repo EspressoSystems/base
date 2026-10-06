@@ -87,6 +87,7 @@ struct PresignProducerState {
 
 struct PresignConfig {
     sender_addresses: Vec<Address>,
+    fixed_recipients: Option<Vec<Address>>,
     sender_next_nonces: Vec<u64>,
     /// Generation paired with `sender_next_nonces`; bumped when submission reports a terminal
     /// rejection so stale signed chunks cannot be enqueued after a nonce resync.
@@ -658,6 +659,7 @@ impl LoadRunner {
             },
             PresignConfig {
                 sender_addresses,
+                fixed_recipients: self.fixed_recipients.clone(),
                 sender_next_nonces: sender_start_nonces,
                 sender_generations: vec![0; sender_count],
                 signers: Arc::clone(&self.signers),
@@ -1297,6 +1299,10 @@ impl LoadRunner {
                 let payload = generator.select_payload()?;
                 let sender_pool_recipient =
                     if payload.uses_pair_recipient() { pair_recipient } else { ring_recipient };
+                let sender_pool_recipient = config
+                    .fixed_recipients
+                    .as_ref()
+                    .map_or(sender_pool_recipient, |recipients| recipients[sender_index]);
                 let to = if payload.uses_runner_recipient() {
                     Self::select_recipient(
                         recipient_keys,
@@ -2226,6 +2232,7 @@ mod tests {
             SubmitCohort, SubmitEvent,
         },
     };
+
     #[test]
     fn mempool_target_rounds_up_and_clamps_to_capacity() {
         assert_eq!(LoadRunner::mempool_target_transactions(300, 70, 10).unwrap(), 5);

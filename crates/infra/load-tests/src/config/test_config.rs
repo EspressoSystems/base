@@ -125,6 +125,10 @@ pub struct TestConfig {
     #[serde(default)]
     pub fresh_recipient_ratio: f64,
 
+    /// Start of a disjoint, deterministic recipient-only account range, one per sender.
+    #[serde(default)]
+    pub recipient_offset: Option<usize>,
+
     /// Address of the precompile looper contract (required when using iterations > 1).
     #[serde(default)]
     pub looper_contract: Option<Address>,
@@ -186,6 +190,7 @@ impl Default for TestConfig {
                 tx_type: TxTypeConfig::Transfer { value: None, self_recipient: false },
             }],
             fresh_recipient_ratio: 0.0,
+            recipient_offset: None,
             looper_contract: None,
             swap_token_amount: default_swap_token_amount(),
             b20_mint_amount: default_b20_mint_amount(),
@@ -649,6 +654,7 @@ impl TestConfig {
             funding_amount: self.funding_amount.clone(),
             sender_count: self.sender_count,
             sender_offset: self.sender_offset,
+            recipient_offset: self.recipient_offset,
             in_flight_per_sender: self.in_flight_per_sender,
             max_total_in_flight: self.max_total_in_flight,
             max_concurrent_submit_requests: self.max_concurrent_submit_requests,
@@ -745,6 +751,7 @@ impl TestConfig {
             flashblocks_ws: self.flashblocks_ws.clone(),
             canonical_heads_ws: None,
             fresh_recipient_ratio: self.fresh_recipient_ratio,
+            recipient_offset: self.recipient_offset,
             validity_ratio: self.validity.ratio,
             validity_predicates: self.validity.to_templates()?,
             validity_priority_lead_ratio: self.validity.priority_lead_ratio,
