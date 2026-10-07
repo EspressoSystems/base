@@ -37,6 +37,10 @@ const LIVE_CATCHUP_WINDOW: Duration = Duration::from_secs(16);
 const LIVE_RECEIPT_SAMPLE_BLOCKS: u64 = 10;
 /// Maximum time to wait for a block watcher RPC request.
 const BLOCK_RPC_TIMEOUT: Duration = Duration::from_secs(10);
+/// Longest sleep between block polls. `block_time` also sizes the load's mempool depth window and may be
+/// longer than the real block interval; the expected boundary then runs ahead of the chain, and sleeping
+/// until it would skip blocks beyond the catch-up window.
+const MAX_WATCH_SLEEP: Duration = Duration::from_millis(250);
 /// Maximum time to wait for a block receipt RPC request.
 const RECEIPT_RPC_TIMEOUT: Duration = Duration::from_secs(50);
 /// Catch-up window when the first successful poll happens with no tip baseline.
@@ -203,7 +207,9 @@ impl BlockWatcher {
             tokio::select! {
                 biased;
                 _ = self.cancel_token.cancelled() => return,
-                _ = tokio::time::sleep_until(clock.expected_boundary().into()) => {}
+                _ = tokio::time::sleep_until(
+                    Self::next_poll(clock.expected_boundary(), Instant::now()).into()
+                ) => {}
             }
 
             let expected_boundary = clock.expected_boundary();
@@ -211,7 +217,7 @@ impl BlockWatcher {
             let mut availability_miss_logged = false;
             let mut required_retry = false;
             let latest = loop {
-                match self.fetch_latest_block_with_timeout(BLOCK_RPC_TIMEOUT).await {
+                match self.fetch_new_block(last_seen_block, BLOCK_RPC_TIMEOUT).await {
                     Ok(block) => {
                         if let Some(block) = block
                             && last_seen_block.is_none_or(|seen| block.observation.number > seen)
@@ -464,11 +470,19 @@ impl BlockWatcher {
         self.fetch_block(BlockNumberOrTag::Latest, BLOCK_RPC_TIMEOUT).await
     }
 
-    async fn fetch_latest_block_with_timeout(
+    async fn fetch_new_block(
         &self,
+        last_seen: Option<u64>,
         timeout: Duration,
     ) -> std::result::Result<Option<ObservedBlock>, String> {
-        self.fetch_block(BlockNumberOrTag::Latest, timeout).await
+        let number = tokio::time::timeout(timeout, self.provider.get_block_number())
+            .await
+            .map_err(|_| format!("eth_blockNumber timed out after {timeout:?}"))?
+            .map_err(|e| e.to_string())?;
+        if last_seen.is_some_and(|seen| number <= seen) {
+            return Ok(None);
+        }
+        self.fetch_block(number, timeout).await
     }
 
     async fn fetch_block(
@@ -742,6 +756,12 @@ impl BlockWatcher {
         Ok(Some((block.header.number, block.transactions.hashes().collect())))
     }
 
+    /// When to poll for the next block: at the expected boundary, but no later than
+    /// [`MAX_WATCH_SLEEP`] from `now`.
+    pub fn next_poll(expected_boundary: Instant, now: Instant) -> Instant {
+        expected_boundary.min(now + MAX_WATCH_SLEEP)
+    }
+
     /// Converts a catch-up duration to a block count, rounding partial blocks up.
     pub fn catchup_blocks(window: Duration, block_time: Duration) -> u64 {
         assert!(!block_time.is_zero(), "block time must be greater than zero");
@@ -960,6 +980,25 @@ mod tests {
             BlockWatcher::catchup_blocks(Duration::from_millis(201), Duration::from_millis(200)),
             2
         );
+    }
+
+    #[test]
+    fn next_poll_waits_for_a_boundary_within_the_longest_sleep() {
+        let now = Instant::now();
+        let boundary = now + Duration::from_millis(100);
+
+        assert_eq!(BlockWatcher::next_poll(boundary, now), boundary);
+    }
+
+    #[test]
+    fn next_poll_caps_a_boundary_that_ran_ahead_of_the_chain() {
+        // With a block_time of 3s, the clock's boundary is 21s past `now` after six blocks. If
+        // real blocks come every second, sleeping until it lets the chain pass the catch-up window.
+        let now = Instant::now();
+        let mut clock = BlockClock::from_now(Duration::from_secs(3), now);
+        clock.advance(6);
+
+        assert_eq!(BlockWatcher::next_poll(clock.expected_boundary(), now), now + MAX_WATCH_SLEEP);
     }
 
     #[test]

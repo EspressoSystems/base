@@ -88,6 +88,10 @@ pub struct TestConfig {
 
     /// Optional measured canonical block window size.
     pub measurement_blocks: Option<u64>,
+    /// Optional time after the start of the measured load from which `steady_tps` counts
+    /// confirmations (e.g., "30s"), so that the prefill and the first blocks do not count.
+    #[serde(default)]
+    pub measurement_skip: Option<String>,
 
     /// Optional gas/s target used to size each block's mempool floor.
     #[serde(default)]
@@ -120,6 +124,10 @@ pub struct TestConfig {
     /// `fresh_recipient_count` to the final summary.
     #[serde(default)]
     pub fresh_recipient_ratio: f64,
+
+    /// Start of a disjoint, deterministic recipient-only account range, one per sender.
+    #[serde(default)]
+    pub recipient_offset: Option<usize>,
 
     /// Address of the precompile looper contract (required when using iterations > 1).
     #[serde(default)]
@@ -172,6 +180,7 @@ impl Default for TestConfig {
             batch_size: default_batch_size(),
             duration: Some("60s".to_string()),
             measurement_blocks: None,
+            measurement_skip: None,
             target_gps: Some(20_000_000),
             block_time: default_block_time(),
             seed: 12345,
@@ -181,6 +190,7 @@ impl Default for TestConfig {
                 tx_type: TxTypeConfig::Transfer { value: None, self_recipient: false },
             }],
             fresh_recipient_ratio: 0.0,
+            recipient_offset: None,
             looper_contract: None,
             swap_token_amount: default_swap_token_amount(),
             b20_mint_amount: default_b20_mint_amount(),
@@ -208,6 +218,7 @@ impl fmt::Debug for TestConfig {
             .field("batch_size", &self.batch_size)
             .field("duration", &self.duration)
             .field("measurement_blocks", &self.measurement_blocks)
+            .field("measurement_skip", &self.measurement_skip)
             .field("target_gps", &self.target_gps)
             .field("block_time", &self.block_time)
             .field("seed", &self.seed)
@@ -575,6 +586,18 @@ impl TestConfig {
         Self::resolve_funder_key(override_key).ok().map(|s| s.address().to_string())
     }
 
+    /// Parses the measurement skip string into a Duration.
+    pub fn parse_measurement_skip(&self) -> Result<Option<Duration>> {
+        self.measurement_skip
+            .as_ref()
+            .map(|d| {
+                humantime::parse_duration(d.trim()).map_err(|e| {
+                    BaselineError::Config(format!("invalid measurement_skip '{d}': {e}"))
+                })
+            })
+            .transpose()
+    }
+
     /// Parses the duration string into a Duration.
     pub fn parse_duration(&self) -> Result<Option<Duration>> {
         self.duration
@@ -631,6 +654,7 @@ impl TestConfig {
             funding_amount: self.funding_amount.clone(),
             sender_count: self.sender_count,
             sender_offset: self.sender_offset,
+            recipient_offset: self.recipient_offset,
             in_flight_per_sender: self.in_flight_per_sender,
             max_total_in_flight: self.max_total_in_flight,
             max_concurrent_submit_requests: self.max_concurrent_submit_requests,
@@ -716,6 +740,7 @@ impl TestConfig {
             separate_setup: None,
             duration,
             measurement_blocks: self.measurement_blocks,
+            measurement_skip: self.parse_measurement_skip()?,
             max_in_flight_per_sender: self.in_flight_per_sender as usize,
             max_total_in_flight: self.max_total_in_flight.map(|max| max as usize),
             max_concurrent_submit_requests: self
@@ -726,6 +751,7 @@ impl TestConfig {
             flashblocks_ws: self.flashblocks_ws.clone(),
             canonical_heads_ws: None,
             fresh_recipient_ratio: self.fresh_recipient_ratio,
+            recipient_offset: self.recipient_offset,
             validity_ratio: self.validity.ratio,
             validity_predicates: self.validity.to_templates()?,
             validity_priority_lead_ratio: self.validity.priority_lead_ratio,

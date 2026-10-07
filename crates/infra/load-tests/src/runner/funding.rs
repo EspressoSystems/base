@@ -636,7 +636,7 @@ impl LoadRunner {
         Ok(())
     }
 
-    /// Collects unique token addresses from configured swap transaction types.
+    /// Collects unique token addresses that need sender balances before the run.
     pub fn collect_swap_tokens(&self) -> Vec<Address> {
         let mut tokens = HashSet::new();
         for tx_config in &self.config.transactions {
@@ -646,9 +646,11 @@ impl LoadRunner {
                     tokens.insert(*token_in);
                     tokens.insert(*token_out);
                 }
+                TxType::Erc20 { contract } => {
+                    tokens.insert(*contract);
+                }
                 TxType::Transfer { .. }
                 | TxType::Calldata { .. }
-                | TxType::Erc20 { .. }
                 | TxType::Storage { .. }
                 | TxType::DoubleCounter { .. }
                 | TxType::B20
@@ -754,10 +756,10 @@ impl LoadRunner {
         Ok(removed_total)
     }
 
-    /// Mints swap tokens to all sender accounts.
+    /// Mints fixture tokens to sender and fixed-recipient accounts.
     ///
-    /// Scans the configured transaction types for token addresses, then mints
-    /// `amount_per_token` of each token to every sender that has insufficient balance.
+    /// Scans the configured ERC20 and swap transaction types for token addresses, then mints
+    /// `amount_per_token` of each token to every holder that has insufficient balance.
     /// Skips accounts that already have enough tokens. Requires tokens that expose
     /// a public `mint(address,uint256)` function (e.g., `FreeTransferERC20`).
     #[instrument(skip(self, funding_key), fields(accounts = self.accounts.len()))]
@@ -772,8 +774,13 @@ impl LoadRunner {
             return Ok(());
         }
 
-        let sender_addresses: Vec<Address> =
-            self.accounts.accounts().iter().map(|a| a.address).collect();
+        let sender_addresses: Vec<Address> = self
+            .accounts
+            .accounts()
+            .iter()
+            .map(|a| a.address)
+            .chain(self.fixed_recipients.iter().flatten().copied())
+            .collect();
         let token_count = tokens.len();
         let total_pairs = token_count * sender_addresses.len();
 
