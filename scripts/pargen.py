@@ -95,15 +95,17 @@ class ChainSummary(object):
             self._blocks = blocks or 0
             self._mean_block_time = mean_block_time or 0
 
-    def __str__(self):
-        steady = f'; steady TPS: {self._steady_tps}' if self._steady_tps is not None else ''
-        return f'TPS: {self._tps}{steady}; confirmed {100 * (float(self._tx_confirmed) / self._tx_submitted)}% ({self._tx_confirmed}/{self._tx_submitted}); blocks: {self._blocks}, mean block time: {self._mean_block_time}'
+    def has_steady_tps(self):
+        return self._steady_tps is not None
+
+    def format(self, steady: bool):
+        tps = self._steady_tps if steady else self._tps
+        return f'TPS: {tps}; confirmed {100 * (float(self._tx_confirmed) / self._tx_submitted)}% ({self._tx_confirmed}/{self._tx_submitted}); blocks: {self._blocks}, mean block time: {self._mean_block_time}'
 
     def __add__(self, other: ChainSummary):
         return ChainSummary(
             tps=self._tps + other._tps,
-            # A total is only meaningful when every chain has one.
-            steady_tps=self._steady_tps + other._steady_tps if self._steady_tps is not None and other._steady_tps is not None else None,
+            steady_tps=self._steady_tps + other._steady_tps if self.has_steady_tps() and other.has_steady_tps() else None,
             tx_submitted=self._tx_submitted + other._tx_submitted,
             tx_confirmed=self._tx_confirmed + other._tx_confirmed,
             blocks=self._blocks + other._blocks,
@@ -138,13 +140,20 @@ def main():
         if any_failed:
             sys.exit(1)
 
+    chains = [ChainSummary(args.output, i) for i in range(len(args.chain))]
+    # Steady TPS, which leaves out the prefill and the first blocks, is only logged when the config
+    # sets measurement_skip. Every chain runs the same config, so they either all have it or none do.
+    steady = chains[0].has_steady_tps()
+    if any(c.has_steady_tps() != steady for c in chains):
+        raise Exception('some chains logged steady_tps and some did not, though they share one config')
+    print(f'type: {"steady" if steady else "actual"}')
+    print("=" * 80)
     summary = None
-    for i in range(len(args.chain)):
-        chain_summary = ChainSummary(args.output, i)
-        print(f'Chain {i}: {chain_summary}')
+    for i, chain_summary in enumerate(chains):
+        print(f'Chain {i}: {chain_summary.format(steady)}')
         summary = chain_summary if summary is None else summary + chain_summary
     print("=" * 80)
-    print(f"Total: {summary}")
+    print(f"Total: {summary.format(steady)}")
 
 if __name__ == '__main__':
     main()
