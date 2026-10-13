@@ -112,6 +112,23 @@ class ChainSummary(object):
             mean_block_time=(self._mean_block_time*self._blocks + other._mean_block_time*other._blocks)/(self._blocks + other._blocks),
         )
 
+def print_settings(outdir: str):
+    # From the run's own generated config rather than --config, which may have changed since.
+    # generate_configs writes every chain's config as a header naming that chain's RPC, followed
+    # by the same shared settings, so chain 0's config without its header shows them for the run.
+    try:
+        with open(config_path(outdir, 0), 'r') as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        # Results copied without their configs still summarize; only the settings are missing.
+        print(f'Settings: {config_path(outdir, 0)} not found')
+        return
+    shared = next((n + 1 for n, l in enumerate(lines) if l.startswith('query_rpc:')), 0)
+    settings = [l for l in lines[shared:] if l.strip() and not l.lstrip().startswith('#')]
+    print(f'Settings ({config_path(outdir, 0)}):')
+    for l in settings:
+        print(f'  {l}')
+
 def main():
     parser = argparse.ArgumentParser(description="run load generators for multiple stacks in parallel, aggregating the results")
     parser.add_argument("--config", required=True, help="shared config for each generator")
@@ -146,6 +163,7 @@ def main():
     steady = chains[0].has_steady_tps()
     if any(c.has_steady_tps() != steady for c in chains):
         raise Exception('some chains logged steady_tps and some did not, though they share one config')
+    print_settings(args.output)
     print(f'type: {"steady" if steady else "actual"}')
     print("=" * 80)
     summary = None
