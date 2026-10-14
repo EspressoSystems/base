@@ -103,9 +103,13 @@ class ChainSummary(object):
         return f'TPS: {tps}; confirmed {100 * (float(self._tx_confirmed) / self._tx_submitted)}% ({self._tx_confirmed}/{self._tx_submitted}); blocks: {self._blocks}, mean block time: {self._mean_block_time}'
 
     def __add__(self, other: ChainSummary):
+        # A sum of one steady and one actual TPS would mean nothing, and dropping steady_tps
+        # would lose it silently.
+        if self.has_steady_tps() != other.has_steady_tps():
+            raise Exception('cannot add a summary with steady_tps to one without')
         return ChainSummary(
             tps=self._tps + other._tps,
-            steady_tps=self._steady_tps + other._steady_tps if self.has_steady_tps() and other.has_steady_tps() else None,
+            steady_tps=self._steady_tps + other._steady_tps if self.has_steady_tps() else None,
             tx_submitted=self._tx_submitted + other._tx_submitted,
             tx_confirmed=self._tx_confirmed + other._tx_confirmed,
             blocks=self._blocks + other._blocks,
