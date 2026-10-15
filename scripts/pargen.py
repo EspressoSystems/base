@@ -69,15 +69,19 @@ def load_gen(cmd: str, outdir: str, i: int, funder: str):
     )
 
 class ChainSummary(object):
-    def __init__(self, outdir=None, i=None, tps=None, tx_submitted=None, tx_confirmed=None, blocks=None, mean_block_time=None):
+    def __init__(self, outdir=None, i=None, tps=None, steady_tps=None, tx_submitted=None, tx_confirmed=None, blocks=None, mean_block_time=None):
         if outdir is not None:
             with open(output_path(outdir, i), 'r') as f:
                 results = json.load(f)
             with open(logs_path(outdir, i), 'r') as f:
-                match = re.search(r'actual_tps\s*=\s*([0-9\.]+)', f.read())
+                logs = f.read()
+                match = re.search(r'actual_tps\s*=\s*([0-9\.]+)', logs)
                 if match is None:
                     raise Exception(f'logs for run {i} do not contain actual_tps line')
                 self._tps = float(match.group(1))
+                # Only logged when the config sets measurement_skip.
+                match = re.search(r'steady_tps\s*=\s*([0-9\.]+)', logs)
+                self._steady_tps = float(match.group(1)) if match is not None else None
             self._tx_submitted = results['throughput']['total_submitted']
             self._tx_confirmed = results['throughput']['total_confirmed']
             self._blocks = results['block_range']['block_count']
@@ -85,22 +89,49 @@ class ChainSummary(object):
             self._mean_block_time = block_latency['secs'] + float(block_latency['nanos'])/1e9
         else:
             self._tps = tps or 0
+            self._steady_tps = steady_tps
             self._tx_submitted = tx_submitted or 0
             self._tx_confirmed = tx_confirmed or 0
             self._blocks = blocks or 0
             self._mean_block_time = mean_block_time or 0
 
-    def __str__(self):
-        return f'TPS: {self._tps}; confirmed {100 * (float(self._tx_confirmed) / self._tx_submitted)}% ({self._tx_confirmed}/{self._tx_submitted}); blocks: {self._blocks}, mean block time: {self._mean_block_time}'
+    def has_steady_tps(self):
+        return self._steady_tps is not None
+
+    def format(self, steady: bool):
+        tps = self._steady_tps if steady else self._tps
+        return f'TPS: {tps}; confirmed {100 * (float(self._tx_confirmed) / self._tx_submitted)}% ({self._tx_confirmed}/{self._tx_submitted}); blocks: {self._blocks}, mean block time: {self._mean_block_time}'
 
     def __add__(self, other: ChainSummary):
+        # A sum of one steady and one actual TPS would mean nothing, and dropping steady_tps
+        # would lose it silently.
+        if self.has_steady_tps() != other.has_steady_tps():
+            raise Exception('cannot add a summary with steady_tps to one without')
         return ChainSummary(
             tps=self._tps + other._tps,
+            steady_tps=self._steady_tps + other._steady_tps if self.has_steady_tps() else None,
             tx_submitted=self._tx_submitted + other._tx_submitted,
             tx_confirmed=self._tx_confirmed + other._tx_confirmed,
             blocks=self._blocks + other._blocks,
             mean_block_time=(self._mean_block_time*self._blocks + other._mean_block_time*other._blocks)/(self._blocks + other._blocks),
         )
+
+def print_settings(outdir: str):
+    # From the run's own generated config rather than --config, which may have changed since.
+    # generate_configs writes every chain's config as a header naming that chain's RPC, followed
+    # by the same shared settings, so chain 0's config without its header shows them for the run.
+    try:
+        with open(config_path(outdir, 0), 'r') as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        # Results copied without their configs still summarize; only the settings are missing.
+        print(f'Settings: {config_path(outdir, 0)} not found')
+        return
+    shared = next((n + 1 for n, l in enumerate(lines) if l.startswith('query_rpc:')), 0)
+    settings = [l for l in lines[shared:] if l.strip() and not l.lstrip().startswith('#')]
+    print(f'Settings ({config_path(outdir, 0)}):')
+    for l in settings:
+        print(f'  {l}')
 
 def main():
     parser = argparse.ArgumentParser(description="run load generators for multiple stacks in parallel, aggregating the results")
@@ -130,13 +161,21 @@ def main():
         if any_failed:
             sys.exit(1)
 
-    summary = ChainSummary()
-    for i in range(len(args.chain)):
-        chain_summary = ChainSummary(args.output, i)
-        print(f'Chain {i}: {chain_summary}')
-        summary += chain_summary
+    chains = [ChainSummary(args.output, i) for i in range(len(args.chain))]
+    # Steady TPS, which leaves out the prefill and the first blocks, is only logged when the config
+    # sets measurement_skip. Every chain runs the same config, so they either all have it or none do.
+    steady = chains[0].has_steady_tps()
+    if any(c.has_steady_tps() != steady for c in chains):
+        raise Exception('some chains logged steady_tps and some did not, though they share one config')
+    print_settings(args.output)
+    print(f'type: {"steady" if steady else "actual"}')
     print("=" * 80)
-    print(f"Total: {summary}")
+    summary = None
+    for i, chain_summary in enumerate(chains):
+        print(f'Chain {i}: {chain_summary.format(steady)}')
+        summary = chain_summary if summary is None else summary + chain_summary
+    print("=" * 80)
+    print(f"Total: {summary.format(steady)}")
 
 if __name__ == '__main__':
     main()
