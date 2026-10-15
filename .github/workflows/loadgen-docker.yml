@@ -2,10 +2,11 @@ name: Loadgen Docker Image
 
 # Builds the `loadgen` target (etc/docker/docker-bake.espresso.hcl) on native
 # runners and merges the per-arch digests into one manifest. Pull requests only
-# build amd64; pushes to main, tags and manual runs build both arches and publish.
+# build amd64; pushes to main or espresso-main, tags and manual runs build both
+# arches and publish.
 on:
   push:
-    branches: [main]
+    branches: [main, espresso-main]
     tags: ['v*']
     paths: &loadgen-paths
       - 'bin/load-tester/**'
